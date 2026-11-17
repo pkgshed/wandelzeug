@@ -12,6 +12,7 @@ import {
   CONFIG_FILE,
   parseConfig,
 } from "./config.ts";
+import { compilePattern, type Replacement } from "./replacements.ts";
 
 /** The parsed templates of a project. */
 export type Templates = {
@@ -55,6 +56,7 @@ export type Project = {
   readonly root: string;
   readonly config: Config;
   readonly templates: Templates;
+  readonly replacements: readonly Replacement[];
 };
 
 /**
@@ -120,6 +122,41 @@ function compileTemplates(config: Config): Templates {
   };
 }
 
+/** Compiles one replacement, whose template takes the release values. */
+function compileReplacement(
+  setting: string,
+  path: string,
+  entry: Config["replacements"][number],
+): Replacement {
+  return {
+    setting,
+    path,
+    find: withContext(`${setting}.find`, () => compilePattern(entry.find)),
+    replace: parseTemplateWithNames(
+      `${setting}.replace`,
+      entry.replace,
+      RELEASE_VALUES,
+    ),
+  };
+}
+
+/**
+ * Compiles the replacements of a configuration. None may change the
+ * changelog, because the release would overwrite the replacement or the
+ * other way round.
+ */
+function compileReplacements(root: string, config: Config): Replacement[] {
+  const changelog = resolve(root, config.changelogPath);
+  return config.replacements.map((entry, index) => {
+    const setting = `replacements[${index}]`;
+    const path = resolve(root, entry.path);
+    if (path === changelog) {
+      throw new Error(`${setting}.path: the changelog takes no replacements`);
+    }
+    return compileReplacement(setting, path, entry);
+  });
+}
+
 /** Builds a project from its root directory and the parsed YAML configuration. */
 export function createProject(root: string, rawConfig: unknown): Project {
   const config = parseConfig(rawConfig);
@@ -127,6 +164,7 @@ export function createProject(root: string, rawConfig: unknown): Project {
     root,
     config,
     templates: compileTemplates(config),
+    replacements: compileReplacements(root, config),
   };
 }
 

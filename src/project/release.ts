@@ -75,14 +75,19 @@ export const checkTag = (
 const releaseName = (project: Project, plan: ReleasePlan): string =>
   formatVersion(plan.version, project.config.versionPrefix);
 
-/** Commits the changelog and the removed fragments of a release, and returns the abbreviated commit hash. */
+/**
+ * Commits the changelog, the removed fragments and the replaced files of a
+ * release, and returns the abbreviated commit hash.
+ */
 async function commitRelease(
   project: Project,
   plan: ReleasePlan,
 ): Promise<string> {
-  const paths = [changelogPath(project), unreleasedPath(project)].map((path) =>
-    relative(project.root, path),
-  );
+  const paths = [
+    changelogPath(project),
+    unreleasedPath(project),
+    ...plan.updates.map((update) => update.path),
+  ].map((path) => relative(project.root, path));
   const message = `release ${releaseName(project, plan)}`;
   await runGit(project.root, [
     "commit",

@@ -139,6 +139,9 @@ Options for batch:
       --keep              Keep the fragments after the release
   -n, --dry-run           Print the release instead of adding it
 
+  batch and release also update the version numbers that the replacements
+  in the configuration name, such as the one in package.json.
+
 Options for release:
       --date <date>       Release date as YYYY-MM-DD (default: today)
   -n, --dry-run           Check the tag and print the release, but change
@@ -146,8 +149,9 @@ Options for release:
 
   release runs the tagHelper from the configuration, semverkzeug by default.
   It first checks that the helper arrives at the same version, then commits
-  the changelog and the removed change files, and tags that commit with the
-  release notes as the tag message.`;
+  the changelog, the removed change files and the files of the
+  replacements, and tags that commit with the release notes as the tag
+  message.`;
 
 const GLOBAL_OPTIONS = {
   directory: { type: "string", short: "C" },
@@ -401,6 +405,9 @@ async function runBatch(args: string[]): Promise<void> {
   }
   const changes = countOf(plan.fragments.length, "change");
   console.log(`updated ${displayPath(plan.path)} from ${changes}`);
+  plan.updates.forEach((update) =>
+    console.log(`updated ${displayPath(update.path)}`),
+  );
 }
 
 async function runLatest(args: string[]): Promise<void> {

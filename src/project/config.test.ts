@@ -146,6 +146,34 @@ describe("configuration", () => {
       { extraFields: [{ key: "pr" }, { key: "pr" }] },
       /extraFields: duplicate key "pr"/,
     ],
+    [
+      { replacements: { path: "package.json" } },
+      /replacements: must be a list/,
+    ],
+    [
+      { replacements: [{ path: "package.json", find: "x" }] },
+      /replacements\[0\]\.replace: is required/,
+    ],
+    [
+      { replacements: [{ path: "package.json", find: "", replace: "" }] },
+      /replacements\[0\]\.find: must be a non-empty regular expression/,
+    ],
+    [
+      { replacements: [{ path: "p", find: "x", replace: "", flags: "i" }] },
+      /replacements\[0\]: unknown setting "flags"/,
+    ],
+    [
+      { replacements: [{ path: "package.json", find: "(", replace: "" }] },
+      /replacements\[0\]\.find: Invalid regular expression/,
+    ],
+    [
+      { replacements: [{ path: "p", find: "x", replace: "{{verison}}" }] },
+      /replacements\[0\]\.replace: unknown value \{\{verison\}\}, expected one of: version/,
+    ],
+    [
+      { replacements: [{ path: "./CHANGELOG.md", find: "x", replace: "" }] },
+      /replacements\[0\]\.path: the changelog takes no replacements/,
+    ],
   ];
 
   test.each(invalid)("%p is rejected with %p", (settings, message) => {

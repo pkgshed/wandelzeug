@@ -10,6 +10,7 @@ import {
   loadFragments,
 } from "../changes/fragments.ts";
 import { type Config, findKind, type Kind } from "../project/config.ts";
+import { type FileUpdate, planReplacements } from "../project/replacements.ts";
 import {
   changelogPath,
   type Project,
@@ -253,6 +254,8 @@ export type ReleasePlan = {
   readonly link: string | undefined;
   /** The whole changelog after the insertion. */
   readonly content: string;
+  /** The files besides the changelog that the replacements rewrite. */
+  readonly updates: readonly FileUpdate[];
   readonly fragments: readonly Fragment[];
 };
 
@@ -299,13 +302,17 @@ export async function planRelease(
     section,
     link,
     content: insertRelease(document, section, link),
+    updates: await planReplacements(project.replacements, values),
     fragments,
   };
 }
 
-/** Writes the changelog of a plan. */
+/** Writes the changelog of a plan and the files that its replacements rewrite. */
 export async function writeRelease(plan: ReleasePlan): Promise<void> {
   await writeFile(plan.path, plan.content);
+  await Promise.all(
+    plan.updates.map((update) => writeFile(update.path, update.content)),
+  );
 }
 
 /** Deletes the fragment files that a release consumed. */

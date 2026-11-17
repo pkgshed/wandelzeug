@@ -113,6 +113,19 @@ linkFormat: ${yamlString(DEFAULT_CONFIG.linkFormat)}
 # --expect, --message-file and --dry-run.
 tagHelper: ${yamlString(DEFAULT_CONFIG.tagHelper)}
 
+# Files whose version numbers "batch" and "release" update with each
+# release, such as package.json. find is a JavaScript regular expression,
+# where ^ and $ match at line breaks. Every match gives way to the Mustache
+# template replace, which takes the values of versionFormat. A pattern that
+# matches nothing stops the release. "release" commits these files together
+# with the changelog. For example:
+#
+# replacements:
+#   - path: package.json
+#     find: '"version": "[^"]*"'
+#     replace: '"version": "{{version}}"'
+replacements: []
+
 # Kinds in changelog order. A bump lets "auto" pick the next version.
 kinds:
   - label: Added

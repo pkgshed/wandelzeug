@@ -340,6 +340,22 @@ const ExtraFieldsSchema = v.pipe(
   ),
 );
 
+// --- Replacements -----------------------------------------------------------
+
+/**
+ * A file whose version number "batch" and "release" keep in step with the
+ * changelog. find is a regular expression and replace a Mustache template
+ * that takes the values of versionFormat.
+ */
+const ReplacementSchema = mapping({
+  path: nonEmptyText,
+  find: v.pipe(
+    v.string("must be a regular expression"),
+    v.nonEmpty("must be a non-empty regular expression"),
+  ),
+  replace: text,
+});
+
 // --- The configuration ------------------------------------------------------
 
 /**
@@ -388,6 +404,8 @@ const ConfigSchema = v.pipe(
      * --dry-run options.
      */
     tagHelper: setting(nonEmptyText, "semverkzeug"),
+    /** Files whose version numbers "batch" and "release" update with each release. */
+    replacements: setting(v.array(ReplacementSchema, "must be a list"), []),
     /** Kinds in changelog order. */
     kinds: v.optional(KindsSchema, DEFAULT_KINDS),
     /** Front matter entries that "new" asks for and "check" validates. */

@@ -13,6 +13,9 @@ import {
   writeConfig,
 } from "./test-helpers.ts";
 
+const PACKAGE_JSON = (version: string): string =>
+  `{\n  "name": "demo",\n  "version": "${version}"\n}\n`;
+
 describe("command line", () => {
   let root: string;
 
@@ -53,6 +56,28 @@ describe("command line", () => {
       'cp "$1" seen-draft.md\ncp prepared.md "$1"\n',
     );
     return { EDITOR: "sh edit.sh" };
+  }
+
+  /** Replaces text in the configuration that init wrote. */
+  async function editConfig(search: string, replacement: string) {
+    const path = join(root, ".changes/config.yaml");
+    const config = await readFile(path, "utf8");
+    await writeFile(path, config.replace(search, replacement));
+  }
+
+  /** Has init set up a project whose package.json version follows each release. */
+  async function projectWithPackageVersion(): Promise<void> {
+    await run("init");
+    await writeFile(join(root, "package.json"), PACKAGE_JSON("0.0.0"));
+    await editConfig(
+      "replacements: []",
+      [
+        "replacements:",
+        "  - path: package.json",
+        `    find: '"version": "[^"]*"'`,
+        `    replace: '"version": "{{version}}"'`,
+      ].join("\n"),
+    );
   }
 
   test("new records a fragment from options", async () => {
@@ -114,6 +139,36 @@ describe("command line", () => {
     expect(await readdir(join(root, ".changes/unreleased"))).toContain(
       "001-added-feature.md",
     );
+    expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).not.toContain(
+      "0.1.0",
+    );
+  });
+
+  test("batch updates the files of the replacements", async () => {
+    await projectWithPackageVersion();
+    await run("new", "-k", "Added", "-b", "* Feature");
+    const result = await run("batch", "minor");
+
+    expect(result).toMatchObject({
+      exitCode: 0,
+      stdout: "updated CHANGELOG.md from 1 change\nupdated package.json\n",
+    });
+    expect(await readFile(join(root, "package.json"), "utf8")).toBe(
+      PACKAGE_JSON("0.1.0"),
+    );
+  });
+
+  test("batch changes nothing when a replacement finds no match", async () => {
+    await projectWithPackageVersion();
+    await writeFile(join(root, "package.json"), "{}\n");
+    await run("new", "-k", "Added", "-b", "* Feature");
+    const result = await run("batch", "minor");
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      "replace in package.json: replacements[0].find: no match",
+    );
+    expect(await unreleasedFiles()).toContain("001-added-feature.md");
     expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).not.toContain(
       "0.1.0",
     );
@@ -422,13 +477,8 @@ describe("command line", () => {
           "",
         ].join("\n"),
       );
-      await run("init");
-      const configPath = join(root, ".changes/config.yaml");
-      const config = await readFile(configPath, "utf8");
-      await writeFile(
-        configPath,
-        config.replace('tagHelper: "semverkzeug"', `tagHelper: "sh ${script}"`),
-      );
+      await projectWithPackageVersion();
+      await editConfig('tagHelper: "semverkzeug"', `tagHelper: "sh ${script}"`);
       await run("new", "-k", "Added", "-b", "* Feature");
       await startRepository(root);
     }
@@ -464,7 +514,12 @@ describe("command line", () => {
         "HEAD",
       );
       expect(changed).toBe(
-        "D\t.changes/unreleased/001-added-feature.md\nM\tCHANGELOG.md\n",
+        [
+          "D\t.changes/unreleased/001-added-feature.md",
+          "M\tCHANGELOG.md",
+          "M\tpackage.json",
+          "",
+        ].join("\n"),
       );
       expect(await gitOutput(root, "status", "--porcelain")).toBe("");
     });

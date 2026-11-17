@@ -236,7 +236,7 @@ wlz release auto
 `release` takes these steps:
 
 1. It asks semverkzeug for a dry run of the bump with the version that the changelog expects. semverkzeug also checks that the working tree is clean. When the tag history and the changelog disagree, `release` stops before it changes anything.
-2. It adds the release to the changelog, removes the change files, and commits both as `release 1.2.0`.
+2. It adds the release to the changelog, updates the files of the [replacements](#update-version-numbers-in-other-files), removes the change files, and commits all of them as `release 1.2.0`.
 3. It has semverkzeug tag that commit, with the release notes as the tag message.
 
 To check a release without changing anything, pass `--dry-run`. If tagging fails after the commit, for example because signing fails, the error names the untagged commit and the command to tag it.
@@ -244,6 +244,25 @@ To check a release without changing anything, pass `--dry-run`. If tagging fails
 `release` needs a semverkzeug whose `bump` command has the options `--expect`, `--message-file`, and `--dry-run`. The `tagHelper` setting in `.changes/config.yaml` chooses the command, and defaults to `semverkzeug`. It runs through the shell, so it can carry arguments, as in `nix run nixpkgs#semverkzeug --`. Any other command that accepts `bump PART` with those options works as well.
 
 In a monorepo, semverkzeug scopes the tags of a project by its directory, as in `mod/v1.2.0`. Set `tagPrefix` to `mod/v` so that the compare links use those tags.
+
+## Update version numbers in other files
+
+Some files repeat the version of a release, such as the `version` field in `package.json`. To have `batch` and `release` update them, list them under `replacements` in `.changes/config.yaml`:
+
+```yaml
+replacements:
+  - path: package.json
+    find: '"version": "[^"]*"'
+    replace: '"version": "{{version}}"'
+```
+
+Each replacement has these settings:
+
+- `path`: the file, relative to the project root.
+- `find`: a JavaScript regular expression. `^` and `$` match at line breaks, so a pattern can anchor to a line.
+- `replace`: a Mustache template with the values of `versionFormat`, such as `version` and `tag`. The `version` value carries the `versionPrefix`. The rendered text replaces every match as it is, so a `$` in it stays a `$`.
+
+When a pattern matches nothing, `batch` and `release` stop before they change anything, so no file keeps an old version unnoticed. `release` commits these files together with the changelog.
 
 ## Projects in a monorepo
 
@@ -264,7 +283,7 @@ The source lives in TypeScript modules below `src/`, grouped by concern, with ea
 
 - `src/cli.ts` is the entry point and holds the commands.
 - `src/shared/` holds helpers, templates, slugs, and versions.
-- `src/project/` holds the configuration, project roots, `init`, and `check`.
+- `src/project/` holds the configuration, project roots, `init`, `check`, `release`, and the replacements.
 - `src/changes/` holds change files, extra fields, and the input of `new`, including its questions and drafts.
 - `src/changelog/` holds the changelog markers and releases.
 
