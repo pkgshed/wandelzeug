@@ -241,7 +241,7 @@ wlz release auto
 
 To check a release without changing anything, pass `--dry-run`. If tagging fails after the commit, for example because signing fails, the error names the untagged commit and the command to tag it.
 
-`release` needs a semverkzeug whose `bump` command has the options `--expect`, `--message-file`, and `--dry-run`. The `tagHelper` setting in `.changes/config.yaml` chooses the command, and defaults to `semverkzeug`. It runs through the shell, so it can carry arguments, as in `nix run nixpkgs#semverkzeug --`. Any other command that accepts `bump PART` with those options works as well.
+`release` needs semverkzeug 0.8.0 or later, whose `bump` command has the options `--expect`, `--message-file`, and `--dry-run`. The `tagHelper` setting in `.changes/config.yaml` chooses the command, and defaults to `semverkzeug`. It runs through the shell, so it can carry arguments, as in `nix run nixpkgs#semverkzeug --`. Any other command that accepts `bump PART` with those options works as well.
 
 In a monorepo, semverkzeug scopes the tags of a project by its directory, as in `mod/v1.2.0`. Set `tagPrefix` to `mod/v` so that the compare links use those tags.
 
