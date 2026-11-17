@@ -12,8 +12,8 @@ import {
   listDirectory,
   readOptionalFile,
 } from "../shared/foundations.ts";
-import type { Config } from "./config.ts";
 import { runGit } from "../shared/git.ts";
+import type { Config } from "./config.ts";
 import { changelogPath, type Project, unreleasedPath } from "./root.ts";
 
 /** A problem that "wlz check" found in a fragment file. */
