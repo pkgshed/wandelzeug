@@ -24,6 +24,7 @@ import {
   yamlEntry,
 } from "./fragments.ts";
 import { type ChangeOptions, isInteractive } from "./options.ts";
+import { askYesNo } from "./prompts.ts";
 
 /** Describes what a field accepts, for the comment in a draft. */
 function describeField(field: ExtraField): string {
@@ -133,13 +134,9 @@ async function runEditor(editor: string, path: string): Promise<void> {
   }
 }
 
-/**
- * Asks whether to reopen a draft with problems. Without a terminal, the
- * answer is no. Unlike the Terminal reader, Bun's confirm() reads one answer
- * and stops, so nothing else reads stdin while the editor runs again.
- */
-const askToEditAgain = (): boolean =>
-  isInteractive() && confirm("Edit the change again?");
+/** Asks whether to reopen a draft with problems. Without a terminal, the answer is no. */
+const askToEditAgain = async (): Promise<boolean> =>
+  isInteractive() && (await askYesNo("Edit the change again?"));
 
 /** Opens the draft until it holds a valid change, the user cancels, or gives up. */
 async function editDraft(
@@ -153,7 +150,7 @@ async function editDraft(
     if (outcome.status !== "invalid") return outcome;
 
     outcome.problems.forEach((problem) => console.error(problem));
-    if (!askToEditAgain()) return outcome;
+    if (!(await askToEditAgain())) return outcome;
   }
 }
 

@@ -62,7 +62,7 @@ Change files live in `.changes/unreleased/nnn-NAME.md`. The number `nnn` orders 
 
 ## Record a change
 
-`new` takes the kind, the body, and metadata from its options. When stdin is a terminal, it asks for whatever the options leave out: the kind, a one-line body, and each extra field. A body line without a list marker becomes a `* ` item.
+`new` takes the kind, the body, and metadata from its options. When stdin is a terminal, it asks for whatever the options leave out: the kind, a one-line body, and each extra field. You pick the kind and the options of `enum` and `enums` fields from a list, and `new` checks each answer before it moves on. A body line without a list marker becomes a `* ` item. To cancel, press Ctrl+C, and nothing gets recorded.
 
 To write a longer change, pass `--edit`. The command writes a draft to `.changes/.draft.md`, filled in from the options, with comments that list the kinds and the open extra fields, and opens it in `$VISUAL` or `$EDITOR`. After the editor closes, `new` checks the draft. When it has problems, the command asks whether to edit it again. An empty body cancels the change.
 
