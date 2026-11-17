@@ -1,6 +1,6 @@
 # wandelzeug
 
-wandelzeug records each changelog entry as its own small Markdown file and adds those entries to your `CHANGELOG.md` when you release. It follows the workflow of [changie](https://changie.dev), but it runs on Bun, installs as the `wlz` command, and has no runtime dependencies. Use it when several branches add changelog entries at the same time and you want to avoid merge conflicts in one shared file.
+wandelzeug records each changelog entry as its own small Markdown file and adds those entries to your `CHANGELOG.md` when you release. It follows the workflow of [changie](https://changie.dev), but it runs on Bun and installs as the `wlz` command. Use it when several branches add changelog entries at the same time and you want to avoid merge conflicts in one shared file.
 
 ## Install
 
