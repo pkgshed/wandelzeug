@@ -107,6 +107,12 @@ releaseTemplate: |
 # linkFormat turns links off.
 linkFormat: ${yamlString(DEFAULT_CONFIG.linkFormat)}
 
+# Command that "wlz release" runs to tag a release, such as semverkzeug
+# (https://github.com/0x5a17ed/semverkzeug). It runs through the shell, so
+# it may carry arguments, and it must accept "bump PART" with the options
+# --expect, --message-file and --dry-run.
+tagHelper: ${yamlString(DEFAULT_CONFIG.tagHelper)}
+
 # Kinds in changelog order. A bump lets "auto" pick the next version.
 kinds:
   - label: Added

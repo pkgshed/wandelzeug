@@ -94,18 +94,28 @@ export const GIT_ENV = {
   GIT_COMMITTER_EMAIL: "test@example.invalid",
 };
 
-export async function git(directory: string, ...args: string[]): Promise<void> {
+/** Runs git with the test configuration and returns its standard output. */
+export async function gitOutput(
+  directory: string,
+  ...args: string[]
+): Promise<string> {
   const child = Bun.spawn(["git", ...args], {
     cwd: directory,
     env: GIT_ENV,
-    stdout: "ignore",
+    stdout: "pipe",
     stderr: "pipe",
   });
-  const [stderr, status] = await Promise.all([
+  const [stdout, stderr, status] = await Promise.all([
+    new Response(child.stdout).text(),
     new Response(child.stderr).text(),
     child.exited,
   ]);
   if (status !== 0) throw new Error(`git ${args.join(" ")}: ${stderr}`);
+  return stdout;
+}
+
+export async function git(directory: string, ...args: string[]): Promise<void> {
+  await gitOutput(directory, ...args);
 }
 
 /** Starts a repository on main that holds everything in the directory. */

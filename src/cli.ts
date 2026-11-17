@@ -35,6 +35,7 @@ import {
 import {
   autoBump,
   BUMP_ARGUMENTS,
+  type BumpArgument,
   isBumpArgument,
   nextVersion,
   parseReleaseTarget,
@@ -57,6 +58,7 @@ import {
   type GitRef,
   parseGitRef,
 } from "./project/checks.ts";
+import { checkTag, releaseAndTag } from "./project/release.ts";
 import {
   changelogPath,
   openProject,
@@ -89,6 +91,7 @@ Commands:
   new                     Record a change in the unreleased directory
   check                   Validate the unreleased changes and the changelog
   batch <version|bump>    Add the unreleased changes to the changelog
+  release <bump>          Add the unreleased changes, commit, and tag the commit
   latest                  Print the latest released version
   next <bump>             Print the version that a bump yields
   show <version>          Print the notes of a release from the changelog
@@ -134,7 +137,17 @@ Options for check:
 Options for batch:
       --date <date>       Release date as YYYY-MM-DD (default: today)
       --keep              Keep the fragments after the release
-  -n, --dry-run           Print the release instead of adding it`;
+  -n, --dry-run           Print the release instead of adding it
+
+Options for release:
+      --date <date>       Release date as YYYY-MM-DD (default: today)
+  -n, --dry-run           Check the tag and print the release, but change
+                          nothing
+
+  release runs the tagHelper from the configuration, semverkzeug by default.
+  It first checks that the helper arrives at the same version, then commits
+  the changelog and the removed change files, and tags that commit with the
+  release notes as the tag message.`;
 
 const GLOBAL_OPTIONS = {
   directory: { type: "string", short: "C" },
@@ -160,6 +173,11 @@ const CHECK_OPTIONS = {
 const BATCH_OPTIONS = {
   date: { type: "string" },
   keep: { type: "boolean" },
+  "dry-run": { type: "boolean", short: "n" },
+} as const satisfies ParseArgsOptionsConfig;
+
+const RELEASE_OPTIONS = {
+  date: { type: "string" },
   "dry-run": { type: "boolean", short: "n" },
 } as const satisfies ParseArgsOptionsConfig;
 
@@ -413,6 +431,39 @@ function missingNotesMessage(
   return `show: no marked release ${release.name} in ${changelog}`;
 }
 
+/** Parses the bump of release, which tags through the helper and so takes no explicit version. */
+function parseReleaseBump(argument: string): BumpArgument {
+  if (!isBumpArgument(argument)) {
+    const bumps = BUMP_ARGUMENTS.join(", ");
+    throw new UsageError(
+      `release: invalid bump ${JSON.stringify(argument)}, expected one of: ${bumps}`,
+    );
+  }
+  return argument;
+}
+
+async function runRelease(args: string[]): Promise<void> {
+  const { values, positionals } = parseCommand(args, RELEASE_OPTIONS);
+  const bump = parseReleaseBump(
+    expectOnePositional("release", positionals, "bump"),
+  );
+  const date = releaseDate(values.date);
+  const project = await openProject(values.directory ?? ".");
+  const plan = await planRelease(project, { type: "bump", bump }, date);
+  const part =
+    bump === "auto" ? autoBump(plan.fragments, project.config.kinds) : bump;
+
+  if (values["dry-run"]) {
+    await checkTag(project, part, plan);
+    const link = plan.link === undefined ? "" : `\n${plan.link}\n`;
+    process.stdout.write(`${plan.section}\n${link}`);
+    return;
+  }
+
+  const result = await releaseAndTag(project, part, plan);
+  console.log(`released ${result.name} in commit ${result.commit}`);
+}
+
 async function runShow(args: string[]): Promise<void> {
   const { values, positionals } = parseCommand(args, {});
   const argument = expectOnePositional("show", positionals, "version");
@@ -457,6 +508,7 @@ const COMMANDS = new Map<string, CommandRunner>([
   ["latest", runLatest],
   ["next", runNext],
   ["show", runShow],
+  ["release", runRelease],
 ]);
 
 /** Reports whether the arguments ask for help before any "--" terminator. */

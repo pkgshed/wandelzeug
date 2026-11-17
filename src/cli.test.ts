@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   commitAll,
   git,
+  gitOutput,
   GIT_ENV,
   PR_FIELD_CONFIG,
   SCRIPT,
@@ -385,5 +386,130 @@ describe("command line", () => {
     const result = await run(...args);
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toMatch(message);
+  });
+
+  describe("release", () => {
+    let helperDirectory: string;
+
+    beforeEach(async () => {
+      helperDirectory = await mkdtemp(join(tmpdir(), "wandelzeug-helper-"));
+    });
+
+    afterEach(async () => {
+      await rm(helperDirectory, { recursive: true, force: true });
+    });
+
+    const callsLog = () => join(helperDirectory, "calls.log");
+    const messageCopy = () => join(helperDirectory, "message.md");
+
+    /**
+     * Sets up a committed project whose tag helper is a fake: it logs its
+     * arguments, copies the tag message, and fails at the check or at the
+     * tag when FAIL_CHECK or FAIL_TAG is set.
+     */
+    async function projectWithFakeHelper(): Promise<void> {
+      const script = join(helperDirectory, "helper.sh");
+      await writeFile(
+        script,
+        [
+          `printf '%s\\n' "$*" >> "${callsLog()}"`,
+          'case " $* " in',
+          '  *" --dry-run "*) [ -z "$FAIL_CHECK" ] || { echo "unexpected version" >&2; exit 1; } ;;',
+          '  *) [ -z "$FAIL_TAG" ] || { echo "signing failed" >&2; exit 1; } ;;',
+          "esac",
+          `while [ $# -gt 0 ]; do [ "$1" = "--message-file" ] && cp "$2" "${messageCopy()}"; shift; done`,
+          "exit 0",
+          "",
+        ].join("\n"),
+      );
+      await run("init");
+      const configPath = join(root, ".changes/config.yaml");
+      const config = await readFile(configPath, "utf8");
+      await writeFile(
+        configPath,
+        config.replace('tagHelper: "semverkzeug"', `tagHelper: "sh ${script}"`),
+      );
+      await run("new", "-k", "Added", "-b", "* Feature");
+      await startRepository(root);
+    }
+
+    const helperCalls = async (): Promise<string[]> =>
+      (await readFile(callsLog(), "utf8")).trimEnd().split("\n");
+
+    const headSubject = async (): Promise<string> =>
+      (await gitOutput(root, "log", "-1", "--format=%s")).trim();
+
+    test("it commits the release and tags the commit through the helper", async () => {
+      await projectWithFakeHelper();
+      const result = await run("release", "auto", "--date", "2026-11-17");
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toMatch(/^released 0\.1\.0 in commit [0-9a-f]+\n$/);
+      const calls = await helperCalls();
+      expect(calls).toHaveLength(2);
+      expect(calls[0]).toBe(`-C ${root} bump minor --expect 0.1.0 --dry-run`);
+      expect(calls[1]).toStartWith(
+        `-C ${root} bump minor --expect 0.1.0 --message-file `,
+      );
+      expect(await readFile(messageCopy(), "utf8")).toBe(
+        "## [`0.1.0`] (2026-11-17)\n\n### Added\n\n* Feature\n",
+      );
+
+      expect(await headSubject()).toBe("release 0.1.0");
+      const changed = await gitOutput(
+        root,
+        "show",
+        "--name-status",
+        "--format=",
+        "HEAD",
+      );
+      expect(changed).toBe(
+        "D\t.changes/unreleased/001-added-feature.md\nM\tCHANGELOG.md\n",
+      );
+      expect(await gitOutput(root, "status", "--porcelain")).toBe("");
+    });
+
+    test("a helper that disagrees changes nothing", async () => {
+      await projectWithFakeHelper();
+      const result = await runWith({ FAIL_CHECK: "1" }, "release", "patch");
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("unexpected version");
+      expect(await helperCalls()).toHaveLength(1);
+      expect(await headSubject()).toBe("base");
+      expect(await gitOutput(root, "status", "--porcelain")).toBe("");
+    });
+
+    test("a failed tag names the untagged release commit", async () => {
+      await projectWithFakeHelper();
+      const result = await runWith({ FAIL_TAG: "1" }, "release", "patch");
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toMatch(
+        /The release commit [0-9a-f]+ stays untagged\. Fix the problem, then tag it, for example with "sh .*helper\.sh bump patch --expect 0\.0\.1"\./,
+      );
+      expect(await headSubject()).toBe("release 0.0.1");
+    });
+
+    test("--dry-run checks the tag and changes nothing", async () => {
+      await projectWithFakeHelper();
+      const result = await run("release", "minor", "--dry-run");
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("<!-- BEGIN wlz:release 0.1.0 -->");
+      expect(await helperCalls()).toEqual([
+        `-C ${root} bump minor --expect 0.1.0 --dry-run`,
+      ]);
+      expect(await headSubject()).toBe("base");
+      expect(await gitOutput(root, "status", "--porcelain")).toBe("");
+    });
+
+    test("an explicit version is a usage error", async () => {
+      await projectWithFakeHelper();
+      const result = await run("release", "1.2.3");
+
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr).toContain('release: invalid bump "1.2.3"');
+    });
   });
 });

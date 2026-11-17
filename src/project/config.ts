@@ -381,6 +381,13 @@ const ConfigSchema = v.pipe(
     releaseTemplate: setting(text, DEFAULT_RELEASE_TEMPLATE),
     /** Mustache template for the link definition of a release. Empty turns links off. */
     linkFormat: setting(text, DEFAULT_LINK_FORMAT),
+    /**
+     * The command that "wlz release" runs to tag a release. It runs through
+     * the shell, so it may carry arguments, and it must accept the bump
+     * command of semverkzeug with its --expect, --message-file and
+     * --dry-run options.
+     */
+    tagHelper: setting(nonEmptyText, "semverkzeug"),
     /** Kinds in changelog order. */
     kinds: v.optional(KindsSchema, DEFAULT_KINDS),
     /** Front matter entries that "new" asks for and "check" validates. */

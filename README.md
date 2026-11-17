@@ -225,6 +225,26 @@ To see a version without writing anything, use one of the following commands:
 - `next BUMP` prints the version that a bump yields.
 - `batch VERSION --dry-run` prints the release, with its markers, that `batch` would insert.
 
+## Release and tag
+
+`batch` only changes the changelog. To also commit the release and tag it, use `release`, which takes a bump: `major`, `minor`, `patch`, or `auto`. It hands the tagging to [semverkzeug](https://github.com/0x5a17ed/semverkzeug), which derives versions from git tags and creates annotated, optionally signed tags:
+
+```sh
+wlz release auto
+```
+
+`release` takes these steps:
+
+1. It asks semverkzeug for a dry run of the bump with the version that the changelog expects. semverkzeug also checks that the working tree is clean. When the tag history and the changelog disagree, `release` stops before it changes anything.
+2. It adds the release to the changelog, removes the change files, and commits both as `release 1.2.0`.
+3. It has semverkzeug tag that commit, with the release notes as the tag message.
+
+To check a release without changing anything, pass `--dry-run`. If tagging fails after the commit, for example because signing fails, the error names the untagged commit and the command to tag it.
+
+`release` needs a semverkzeug whose `bump` command has the options `--expect`, `--message-file`, and `--dry-run`. The `tagHelper` setting in `.changes/config.yaml` chooses the command, and defaults to `semverkzeug`. It runs through the shell, so it can carry arguments, as in `nix run nixpkgs#semverkzeug --`. Any other command that accepts `bump PART` with those options works as well.
+
+In a monorepo, semverkzeug scopes the tags of a project by its directory, as in `mod/v1.2.0`. Set `tagPrefix` to `mod/v` so that the compare links use those tags.
+
 ## Projects in a monorepo
 
 Each project keeps its own `.changes` directory with its configuration in `.changes/config.yaml`. wandelzeug looks for `.changes/config.yaml` in the current directory and then in each parent directory, so you can run it anywhere inside a project. To work on another project, pass `-C DIRECTORY`.

@@ -174,18 +174,9 @@ export function renderRelease(
   return renderTemplate(project.templates.release, view, partials).trim();
 }
 
-/** Renders a release wrapped in its BEGIN and END markers. */
-export function renderReleaseSection(
-  project: Project,
-  values: ReleaseValues,
-  changes: readonly Change[],
-): string {
-  return [
-    beginMarker(values.version),
-    renderRelease(project, values, changes),
-    endMarker(values.version),
-  ].join("\n");
-}
+/** Wraps the notes of a release in its BEGIN and END markers. */
+const wrapInMarkers = (name: string, notes: string): string =>
+  [beginMarker(name), notes, endMarker(name)].join("\n");
 
 /**
  * Renders the link definition of a release, or returns undefined when links
@@ -252,6 +243,10 @@ function rejectExistingRelease(
 /** The changelog with a new release, and the fragments the release consumes. */
 export type ReleasePlan = {
   readonly path: string;
+  /** The version of the release. */
+  readonly version: Version;
+  /** The release as the template renders it, without markers, such as for a tag message. */
+  readonly notes: string;
   /** The release with its markers, as batch inserts it. */
   readonly section: string;
   /** The link definition that batch inserts below the links anchor, when links are on. */
@@ -289,7 +284,8 @@ export async function planRelease(
   rejectExistingRelease(releases, version);
 
   const values = releaseValues(project.config, version, date, releases);
-  const section = renderReleaseSection(project, values, fragments);
+  const notes = renderRelease(project, values, fragments);
+  const section = wrapInMarkers(values.version, notes);
   const link = renderLink(project, values);
   if (link !== undefined && document.links === undefined) {
     throw new Error(
@@ -298,6 +294,8 @@ export async function planRelease(
   }
   return {
     path: changelogPath(project),
+    version,
+    notes,
     section,
     link,
     content: insertRelease(document, section, link),
