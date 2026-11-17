@@ -82,7 +82,7 @@ export async function listDirectory(directory: string): Promise<string[]> {
   }
 }
 
-/** Creates a file unless it exists already, and reports whether it did. */
+/** Reads a text file, or returns undefined when the file does not exist. */
 export async function readOptionalFile(
   path: string,
 ): Promise<string | undefined> {
@@ -94,6 +94,7 @@ export async function readOptionalFile(
   }
 }
 
+/** Creates a file unless it exists already, and reports whether it did. */
 export async function writeNewFile(
   path: string,
   content: string,
