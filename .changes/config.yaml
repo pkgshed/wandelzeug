@@ -1,0 +1,117 @@
+# Configuration for wandelzeug. Paths are relative to the project root,
+# the directory that holds .changes.
+
+# Directory below .changes for unreleased change files.
+unreleasedDir: unreleased
+# Changelog that "wlz batch" adds each release to, right below the
+# <!-- wlz:releases --> anchor, with its link below <!-- wlz:links -->.
+changelogPath: CHANGELOG.md
+# Prefix of release names and the {{version}} value, as in "1.1.2".
+versionPrefix: ""
+# Prefix of git tags and the {{tag}} value, as in "v1.1.2".
+tagPrefix: v
+# Web address of the repository for the compare links. While it is empty,
+# the default linkFormat stays off.
+repositoryUrl: ""
+
+# Templates use Mustache (https://mustache.github.io/mustache.5.html)
+# without HTML escaping. {{name}} inserts a value, and a section such as
+# {{#pr}}...{{/pr}} renders only when pr has a value.
+
+# Fragment file name between the "nnn-" sequence prefix and ".md".
+# Values: title from the first body line, kind, and any front matter key
+# such as pr. Every value becomes a lower-case slug.
+fragmentName: "{{kind}}-{{title}}"
+# Maximum length of the title slug.
+titleMaxLength: 48
+
+# Heading of a release. Values: version, date, tag, previousVersion and
+# previousTag. The brackets make the version a link to its definition.
+versionFormat: "## [`{{version}}`] ({{date}})"
+# Heading of a kind section. Value: kind.
+kindFormat: "### {{kind}}"
+# One change entry. Values: body, kind, and any front matter key, as in
+# "{{body}}{{#pr}} (#{{pr}}){{/pr}}".
+changeFormat: "{{body}}"
+
+# The whole release. It places the three formats above as the partials
+# {{> version}}, {{> kind}} and {{> change}}, each as whole lines, and
+# loops over kinds, which hold a kind and its changes. To change a detail,
+# edit a format. To change the layout, replace this template.
+releaseTemplate: |
+  {{> version}}
+  {{#kinds}}
+
+  {{> kind}}
+
+  {{#changes}}
+  {{> change}}
+  {{/changes}}
+  {{/kinds}}
+
+# Link definition of a release, below the <!-- wlz:links --> anchor. It
+# compares the tag with the previous tag, or links the tag of a first
+# release. Values: those of versionFormat and repositoryUrl. An empty
+# linkFormat turns links off.
+linkFormat: "[`{{version}}`]: {{repositoryUrl}}/{{#previousTag}}compare/{{previousTag}}...{{tag}}{{/previousTag}}{{^previousTag}}releases/tag/{{tag}}{{/previousTag}}"
+
+# Command that "wlz release" runs to tag a release, such as semverkzeug
+# (https://github.com/0x5a17ed/semverkzeug). It runs through the shell, so
+# it may carry arguments, and it must accept "bump PART" with the options
+# --expect, --message-file and --dry-run.
+tagHelper: "semverkzeug"
+
+# Files whose version numbers "batch" and "release" update with each
+# release, such as package.json. find is a JavaScript regular expression,
+# where ^ and $ match at line breaks. Every match gives way to the Mustache
+# template replace, which takes the values of versionFormat. A pattern that
+# matches nothing stops the release. "release" commits these files together
+# with the changelog. For example:
+#
+# replacements:
+#   - path: package.json
+#     find: '"version": "[^"]*"'
+#     replace: '"version": "{{version}}"'
+replacements:
+  - path: package.json
+    find: '^  "version": "[^"]*",$'
+    replace: '  "version": "{{version}}",'
+
+# Kinds in changelog order. A bump lets "auto" pick the next version.
+kinds:
+  - label: Added
+    bump: minor
+  - label: Changed
+    bump: major
+  - label: Deprecated
+    bump: minor
+  - label: Removed
+    bump: major
+  - label: Fixed
+    bump: patch
+  - label: Security
+    bump: patch
+
+# Front matter entries besides kind that "new" asks for and "check"
+# validates. Their values sit at the top level of the front matter, next to
+# kind. Each entry has a key, a prompt (default: the key), a type (default:
+# string), and whether it is required (default: false). The types are:
+#
+#   string  one line of text, limited by minLength and maxLength
+#   block   several lines of text, limited by minLength and maxLength
+#   int     a whole number, limited by minInt and maxInt; "#42" counts as 42
+#   enum    one of enumOptions
+#   enums   any of enumOptions, stored as one comma-separated string
+#
+# For example:
+#
+# extraFields:
+#   - key: pr
+#     prompt: Pull request number
+#     type: int
+#     minInt: 1
+#     required: true
+#   - key: area
+#     type: enum
+#     enumOptions: [cli, docs, tests]
+extraFields: []

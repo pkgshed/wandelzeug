@@ -278,7 +278,9 @@ bun install
 just ci
 ```
 
-`just ci` checks the formatting with Prettier, checks the types with TypeScript, runs the tests, and builds `dist/wlz.js` and runs it once. To format the code, run `just format`.
+`just ci` checks the formatting with Prettier, checks the types with TypeScript, runs the tests, and builds `dist/wlz.js`. It then runs the bundle as `wlz check` on the change files of wandelzeug. To format the code, run `just format`.
+
+wandelzeug keeps its own changelog with wandelzeug. To record a change that users notice, run `bun src/cli.ts new` in the checkout, and commit the change file together with the change.
 
 The source lives in TypeScript modules below `src/`, grouped by concern, with each module's tests next to it:
 

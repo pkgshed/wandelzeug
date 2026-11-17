@@ -10,9 +10,9 @@ quality:
     bun run prettier --check .
     bun run tsc --project tsconfig.json
 
-# Run the tests, then build the bundle and run it once.
+# Run the tests, then build the bundle and check the changes of wandelzeug with it.
 checks: test build
-    bun dist/wlz.js --help > /dev/null
+    bun dist/wlz.js check
 
 # Run the test suite.
 test:
