@@ -9,7 +9,7 @@ import {
   type Fragment,
   loadFragments,
 } from "../changes/fragments.ts";
-import { findKind, type Kind } from "../project/config.ts";
+import { type Config, findKind, type Kind } from "../project/config.ts";
 import {
   changelogPath,
   type Project,
@@ -39,6 +39,7 @@ import {
   endMarker,
   insertRelease,
   knownReleases,
+  LINKS_ANCHOR,
   readChangelog,
   type Release,
 } from "./markers.ts";
@@ -108,19 +109,65 @@ function kindViews(
   });
 }
 
+/** What templates know about a release besides its changes. */
+export type ReleaseValues = {
+  /** The release name with the version prefix, such as "1.1.2". */
+  readonly version: string;
+  readonly date: IsoDate;
+  /** The git tag with the tag prefix, such as "v1.1.2". */
+  readonly tag: string;
+  readonly previousVersion: string | undefined;
+  readonly previousTag: string | undefined;
+};
+
 /**
- * Renders a release through releaseTemplate. The template sees version,
- * date, and kinds, where each kind has a kind and its changes.
+ * Picks the release that a new version follows: the highest known release
+ * below it. A hotfix such as 1.4.3 thus follows 1.4.2, even after 1.5.0.
+ */
+export function previousRelease(
+  releases: readonly Release[],
+  version: Version,
+): Release | undefined {
+  const [previous] = releases
+    .filter((release) => compareVersions(release.version, version) < 0)
+    .sort((a, b) => compareVersions(b.version, a.version));
+  return previous;
+}
+
+/** Describes a new release for the templates, with names in the configured prefixes. */
+export function releaseValues(
+  config: Config,
+  version: Version,
+  date: IsoDate,
+  releases: readonly Release[],
+): ReleaseValues {
+  const previous = previousRelease(releases, version)?.version;
+  return {
+    version: formatVersion(version, config.versionPrefix),
+    date,
+    tag: formatVersion(version, config.tagPrefix),
+    previousVersion:
+      previous === undefined
+        ? undefined
+        : formatVersion(previous, config.versionPrefix),
+    previousTag:
+      previous === undefined
+        ? undefined
+        : formatVersion(previous, config.tagPrefix),
+  };
+}
+
+/**
+ * Renders a release through releaseTemplate. The template sees the release
+ * values and kinds, where each kind has a kind and its changes.
  */
 export function renderRelease(
   project: Project,
-  versionName: string,
-  date: IsoDate,
+  values: ReleaseValues,
   changes: readonly Change[],
 ): string {
   const view = {
-    version: versionName,
-    date,
+    ...values,
     kinds: kindViews(project.config.kinds, changes),
   };
   const partials = releasePartials(project.templates);
@@ -130,15 +177,31 @@ export function renderRelease(
 /** Renders a release wrapped in its BEGIN and END markers. */
 export function renderReleaseSection(
   project: Project,
-  versionName: string,
-  date: IsoDate,
+  values: ReleaseValues,
   changes: readonly Change[],
 ): string {
   return [
-    beginMarker(versionName),
-    renderRelease(project, versionName, date, changes),
-    endMarker(versionName),
+    beginMarker(values.version),
+    renderRelease(project, values, changes),
+    endMarker(values.version),
   ].join("\n");
+}
+
+/**
+ * Renders the link definition of a release, or returns undefined when links
+ * are off. Links are off with an empty linkFormat, and with a linkFormat
+ * that needs repositoryUrl while repositoryUrl is empty.
+ */
+export function renderLink(
+  project: Project,
+  values: ReleaseValues,
+): string | undefined {
+  const { link } = project.templates;
+  const repositoryUrl = project.config.repositoryUrl.replace(/\/+$/, "");
+  const lacksRepository =
+    link.names.includes("repositoryUrl") && repositoryUrl === "";
+  if (link.source.trim() === "" || lacksRepository) return undefined;
+  return renderTemplate(link, { ...values, repositoryUrl }).trim();
 }
 
 /** What a release gets as its version: an explicit version or a bump of the latest release. */
@@ -191,6 +254,8 @@ export type ReleasePlan = {
   readonly path: string;
   /** The release with its markers, as batch inserts it. */
   readonly section: string;
+  /** The link definition that batch inserts below the links anchor, when links are on. */
+  readonly link: string | undefined;
   /** The whole changelog after the insertion. */
   readonly content: string;
   readonly fragments: readonly Fragment[];
@@ -198,7 +263,8 @@ export type ReleasePlan = {
 
 /**
  * Plans the release of all unreleased changes without writing anything. The
- * release name always carries the configured version prefix.
+ * release name always carries the configured version prefix, and its tag
+ * the configured tag prefix.
  */
 export async function planRelease(
   project: Project,
@@ -222,12 +288,19 @@ export async function planRelease(
   );
   rejectExistingRelease(releases, version);
 
-  const name = formatVersion(version, project.config.versionPrefix);
-  const section = renderReleaseSection(project, name, date, fragments);
+  const values = releaseValues(project.config, version, date, releases);
+  const section = renderReleaseSection(project, values, fragments);
+  const link = renderLink(project, values);
+  if (link !== undefined && document.links === undefined) {
+    throw new Error(
+      `${displayPath(changelogPath(project))}: no ${LINKS_ANCHOR} anchor for the link of ${values.version}, add one where the link definitions go or set linkFormat to ""`,
+    );
+  }
   return {
     path: changelogPath(project),
     section,
-    content: insertRelease(document, section),
+    link,
+    content: insertRelease(document, section, link),
     fragments,
   };
 }

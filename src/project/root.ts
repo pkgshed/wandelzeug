@@ -20,7 +20,17 @@ export type Templates = {
   readonly kind: Template;
   readonly change: Template;
   readonly release: Template;
+  readonly link: Template;
 };
+
+/** The values that describe a release: its name, date, tag and predecessor. */
+const RELEASE_VALUES = [
+  "version",
+  "date",
+  "tag",
+  "previousVersion",
+  "previousTag",
+];
 
 /** The partials that releaseTemplate can place, filled by the formats of the same name. */
 const RELEASE_PARTIALS = ["version", "kind", "change"];
@@ -95,13 +105,18 @@ function parseReleaseTemplate(source: string): Template {
 function compileTemplates(config: Config): Templates {
   return {
     fragmentName: parseFragmentNameTemplate(config.fragmentName),
-    version: parseTemplateWithNames("versionFormat", config.versionFormat, [
-      "version",
-      "date",
-    ]),
+    version: parseTemplateWithNames(
+      "versionFormat",
+      config.versionFormat,
+      RELEASE_VALUES,
+    ),
     kind: parseTemplateWithNames("kindFormat", config.kindFormat, ["kind"]),
     change: parseSettingTemplate("changeFormat", config.changeFormat),
     release: parseReleaseTemplate(config.releaseTemplate),
+    link: parseTemplateWithNames("linkFormat", config.linkFormat, [
+      ...RELEASE_VALUES,
+      "repositoryUrl",
+    ]),
   };
 }
 

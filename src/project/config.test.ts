@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { projectWith } from "../test-helpers.ts";
 import { DEFAULT_CONFIG, parseConfig } from "./config.ts";
-import { INIT_CONFIG } from "./setup.ts";
+import { initConfig } from "./setup.ts";
 
 describe("configuration", () => {
   test("an empty configuration uses the defaults", () => {
@@ -9,7 +9,7 @@ describe("configuration", () => {
   });
 
   test("the configuration written by init spells out the defaults", () => {
-    expect(parseConfig(Bun.YAML.parse(INIT_CONFIG))).toEqual(DEFAULT_CONFIG);
+    expect(parseConfig(Bun.YAML.parse(initConfig("")))).toEqual(DEFAULT_CONFIG);
   });
 
   test("kinds may be bare labels", () => {

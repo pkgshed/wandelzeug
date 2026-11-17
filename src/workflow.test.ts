@@ -50,8 +50,8 @@ describe("project workflow", () => {
   const unreleasedFiles = async (): Promise<string[]> =>
     (await readdir(join(root, ".changes", "unreleased"))).sort();
 
-  test("init, new and batch add releases to the changelog", async () => {
-    await initProject(root);
+  test("init, new and batch add releases and links to the changelog", async () => {
+    await initProject(root, { repositoryUrl: "https://codeberg.org/o/r" });
     const project = await loadProject(root);
     await recordChange(
       project,
@@ -72,8 +72,8 @@ describe("project workflow", () => {
       isoDate("2026-11-17"),
     );
     const firstSection = [
-      "<!-- BEGIN wlz:release v0.1.0 -->",
-      "## v0.1.0 - 2026-11-17",
+      "<!-- BEGIN wlz:release 0.1.0 -->",
+      "## [`0.1.0`] (2026-11-17)",
       "",
       "### Added",
       "",
@@ -83,10 +83,13 @@ describe("project workflow", () => {
       "### Fixed",
       "",
       "* Crash on empty input",
-      "<!-- END wlz:release v0.1.0 -->",
+      "<!-- END wlz:release 0.1.0 -->",
     ].join("\n");
     expect(first.path).toBe(join(root, "CHANGELOG.md"));
     expect(first.section).toBe(firstSection);
+    expect(first.link).toBe(
+      "[`0.1.0`]: https://codeberg.org/o/r/releases/tag/v0.1.0",
+    );
     await writeRelease(first);
     await removeFragments(first.fragments);
     expect(await unreleasedFiles()).toEqual([".gitkeep"]);
@@ -104,15 +107,19 @@ describe("project workflow", () => {
         INIT_HEADER,
         "<!-- wlz:releases -->",
         "",
-        "<!-- BEGIN wlz:release v0.1.1 -->",
-        "## v0.1.1 - 2026-11-18",
+        "<!-- BEGIN wlz:release 0.1.1 -->",
+        "## [`0.1.1`] (2026-11-18)",
         "",
         "### Fixed",
         "",
         "* Hang on exit",
-        "<!-- END wlz:release v0.1.1 -->",
+        "<!-- END wlz:release 0.1.1 -->",
         "",
         firstSection,
+        "",
+        "<!-- wlz:links -->",
+        "[`0.1.1`]: https://codeberg.org/o/r/compare/v0.1.0...v0.1.1",
+        "[`0.1.0`]: https://codeberg.org/o/r/releases/tag/v0.1.0",
         "",
       ].join("\n"),
     );
@@ -162,11 +169,11 @@ describe("project workflow", () => {
     );
     expect(plan.section).toBe(
       [
-        "<!-- BEGIN wlz:release v2.0.0 -->",
-        "# Release v2.0.0",
+        "<!-- BEGIN wlz:release 2.0.0 -->",
+        "# Release 2.0.0",
         "- [Changed] API renamed (breaking)",
         "- [Fixed] Crash",
-        "<!-- END wlz:release v2.0.0 -->",
+        "<!-- END wlz:release 2.0.0 -->",
       ].join("\n"),
     );
   });
@@ -189,7 +196,7 @@ describe("project workflow", () => {
       isoDate("2026-11-17"),
     );
     expect(plan.section).toContain(
-      "## v1.1.0 - 2026-11-17\n- Feature\n- Crash\n<!-- END",
+      "## [`1.1.0`] (2026-11-17)\n- Feature\n- Crash\n<!-- END",
     );
   });
 
@@ -200,7 +207,7 @@ describe("project workflow", () => {
     ],
     ["the baseline", ""],
   ])("batch refuses a version that %s has already", async (_, lines) => {
-    await initProject(root, release("1.0.0"));
+    await initProject(root, { baseline: release("1.0.0") });
     if (lines !== "") await writeChangelog(root, lines);
     const project = await loadProject(root);
     await recordChange(project, change("Fixed", "* Crash"));
@@ -268,10 +275,11 @@ describe("project workflow", () => {
     expect(changelogResult(results)).toEqual({
       path: join(root, "CHANGELOG.md"),
       action: "updated",
-      detail: "added the release anchor on line 3 with baseline 1.4.2",
+      detail:
+        "added the release anchor on line 3 with baseline 1.4.2, and the links anchor on line 9",
     });
     expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toBe(
-      "# History\n\n<!-- wlz:releases baseline=1.4.2 -->\n\n## 1.4.2\n\n* Fix\n",
+      "# History\n\n<!-- wlz:releases baseline=1.4.2 -->\n\n## 1.4.2\n\n* Fix\n\n<!-- wlz:links -->\n",
     );
   });
 
@@ -285,9 +293,9 @@ describe("project workflow", () => {
 
   test("init refuses a baseline for a changelog with an anchor", async () => {
     await writeChangelog(root);
-    await expect(initProject(root, release("2.0.0"))).rejects.toThrow(
-      /has a release anchor already, change its baseline there/,
-    );
+    await expect(
+      initProject(root, { baseline: release("2.0.0") }),
+    ).rejects.toThrow(/has wlz anchors already, change its baseline there/);
     expect(await Bun.file(join(root, ".changes", "config.yaml")).exists()).toBe(
       false,
     );

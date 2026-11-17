@@ -39,6 +39,8 @@ export type ChangelogDocument = {
   readonly baseline: Release | undefined;
   /** The marked releases in the order of the file. */
   readonly releases: readonly ReleaseSection[];
+  /** The index of the line that holds the links anchor, when there is one. */
+  readonly links: number | undefined;
 };
 
 /** Formats the anchor below which "batch" inserts new releases. */
@@ -46,6 +48,9 @@ export const anchorMarker = (baseline: string | undefined): string =>
   baseline === undefined
     ? "<!-- wlz:releases -->"
     : `<!-- wlz:releases baseline=${baseline} -->`;
+
+/** The anchor below which "batch" inserts the link definition of a new release. */
+export const LINKS_ANCHOR = "<!-- wlz:links -->";
 
 export const beginMarker = (name: string): string =>
   `<!-- BEGIN wlz:release ${name} -->`;
@@ -56,6 +61,7 @@ export const endMarker = (name: string): string =>
 const ANCHOR_MARKER = /^<!--\s*wlz:releases\b(.*?)-->$/;
 const BEGIN_MARKER = /^<!--\s*BEGIN\s+wlz:release\s+(\S+)\s*-->$/;
 const END_MARKER = /^<!--\s*END\s+wlz:release\s+(\S+)\s*-->$/;
+const LINKS_MARKER = /^<!--\s*wlz:links\s*-->$/;
 
 /** Any comment with the wlz: prefix, so a mistyped marker fails instead of passing as text. */
 const ANY_MARKER = /^<!--\s*(?:BEGIN\s+|END\s+)?wlz:/;
@@ -64,6 +70,7 @@ type Marker =
   | { readonly type: "anchor"; readonly attributes: string }
   | { readonly type: "begin"; readonly name: string }
   | { readonly type: "end"; readonly name: string }
+  | { readonly type: "links" }
   | { readonly type: "unknown" };
 
 function classifyLine(line: string): Marker | undefined {
@@ -77,11 +84,13 @@ function classifyLine(line: string): Marker | undefined {
   if (begin !== undefined) return { type: "begin", name: begin };
   const end = END_MARKER.exec(text)?.[1];
   if (end !== undefined) return { type: "end", name: end };
+  if (LINKS_MARKER.test(text)) return { type: "links" };
   return ANY_MARKER.test(text) ? { type: "unknown" } : undefined;
 }
 
-export const hasAnchor = (text: string): boolean =>
-  text.split(/\r?\n/).some((line) => classifyLine(line)?.type === "anchor");
+/** Reports whether a changelog holds the release anchor or the links anchor. */
+export const hasMarker = (text: string, type: "anchor" | "links"): boolean =>
+  text.split(/\r?\n/).some((line) => classifyLine(line)?.type === type);
 
 function parseReleaseName(name: string): Release {
   const version = parseVersion(name);
@@ -115,6 +124,7 @@ type ChangelogScan = {
     | undefined;
   open: { readonly release: Release; readonly begin: number } | undefined;
   readonly releases: ReleaseSection[];
+  links: number | undefined;
 };
 
 function scanAnchor(
@@ -131,6 +141,18 @@ function scanAnchor(
     throw new Error(`release anchor inside release ${scan.open.release.name}`);
   }
   scan.anchor = { index, baseline: parseAnchorBaseline(attributes) };
+}
+
+function scanLinks(scan: ChangelogScan, index: number): void {
+  if (scan.links !== undefined) {
+    throw new Error(
+      `second links anchor, the first is on line ${scan.links + 1}`,
+    );
+  }
+  if (scan.open !== undefined) {
+    throw new Error(`links anchor inside release ${scan.open.release.name}`);
+  }
+  scan.links = index;
 }
 
 function scanBegin(scan: ChangelogScan, name: string, index: number): void {
@@ -172,9 +194,11 @@ function scanMarker(scan: ChangelogScan, marker: Marker, index: number): void {
       return scanBegin(scan, marker.name, index);
     case "end":
       return scanEnd(scan, marker.name, index);
+    case "links":
+      return scanLinks(scan, index);
     case "unknown":
       throw new Error(
-        "unknown wlz marker, expected the release anchor or BEGIN or END wlz:release VERSION",
+        "unknown wlz marker, expected an anchor or BEGIN or END wlz:release VERSION",
       );
   }
 }
@@ -191,7 +215,16 @@ function closingProblems(scan: ChangelogScan): string[] {
     scan.anchor === undefined
       ? [`no ${anchorMarker(undefined)} anchor, run "wlz init" to add it`]
       : [];
-  return [...unclosed, ...missingAnchor];
+  const linksAbove =
+    scan.anchor !== undefined &&
+    scan.links !== undefined &&
+    scan.links < scan.anchor.index;
+  const misplacedLinks = linksAbove
+    ? [
+        `line ${(scan.links ?? 0) + 1}: the links anchor must come after the release anchor`,
+      ]
+    : [];
+  return [...unclosed, ...missingAnchor, ...misplacedLinks];
 }
 
 /** The parsed changelog, or every problem with its markers. */
@@ -209,6 +242,7 @@ export function parseChangelog(text: string): ChangelogParse {
     anchor: undefined,
     open: undefined,
     releases: [],
+    links: undefined,
   };
   const problems: string[] = [];
   lines.forEach((line, index) => {
@@ -231,6 +265,7 @@ export function parseChangelog(text: string): ChangelogParse {
       anchor: anchor.index,
       baseline: anchor.baseline,
       releases: scan.releases,
+      links: scan.links,
     },
   };
 }
@@ -255,16 +290,36 @@ export function releaseNotes(
   return lines.join("\n").trim() + "\n";
 }
 
+/** Inserts a link definition right below the links anchor, so the newest link comes first. */
+function insertLink(
+  document: ChangelogDocument,
+  link: string | undefined,
+): readonly string[] {
+  if (link === undefined) return document.lines;
+  if (document.links === undefined) {
+    throw new Error(`no ${LINKS_ANCHOR} anchor for the link definition`);
+  }
+  return [
+    ...document.lines.slice(0, document.links + 1),
+    link,
+    ...document.lines.slice(document.links + 1),
+  ];
+}
+
 /**
- * Inserts a release section right below the anchor, so the newest release
- * comes first. Every other line of the changelog stays as it is.
+ * Inserts a release section right below the release anchor, so the newest
+ * release comes first, and its link definition below the links anchor.
+ * Every other line of the changelog stays as it is. The links anchor sits
+ * below the release anchor, so its insertion leaves that index valid.
  */
 export function insertRelease(
   document: ChangelogDocument,
   section: string,
+  link: string | undefined,
 ): string {
-  const before = document.lines.slice(0, document.anchor + 1);
-  const after = document.lines.slice(document.anchor + 1);
+  const withLink = insertLink(document, link);
+  const before = withLink.slice(0, document.anchor + 1);
+  const after = withLink.slice(document.anchor + 1);
   const needsGap = after[0]?.trim() !== "";
   const lines = [
     ...before,

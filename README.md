@@ -107,10 +107,11 @@ The following settings in `.changes/config.yaml` are templates:
 | Setting | Default | Values |
 |---------|---------|--------|
 | `fragmentName` | `{{kind}}-{{title}}` | `title` (the first body line without its list marker), `kind`, and any front matter key. Every value becomes a lower-case slug, and `titleMaxLength` limits the title. |
-| `versionFormat` | `## {{version}} - {{date}}` | `version` and `date` |
+| `versionFormat` | ``## [`{{version}}`] ({{date}})`` | `version`, `date`, `tag`, `previousVersion`, and `previousTag` |
 | `kindFormat` | `### {{kind}}` | `kind` |
 | `changeFormat` | `{{body}}` | `body`, `kind`, and any front matter key, such as `{{body}}{{#pr}} (#{{pr}}){{/pr}}` |
-| `releaseTemplate` | See the following example | `version`, `date`, and `kinds`, where each kind has a `kind` and its `changes` |
+| `releaseTemplate` | See the following example | The values of `versionFormat`, and `kinds`, where each kind has a `kind` and its `changes` |
+| `linkFormat` | See [Links](#links) | The values of `versionFormat`, and `repositoryUrl` |
 
 `releaseTemplate` renders a whole release. By default, it places the three formats as the partials `{{> version}}`, `{{> kind}}`, and `{{> change}}`, each as whole lines:
 
@@ -138,46 +139,69 @@ The file that `init` writes explains every other setting, including the paths an
 ```md
 # Changelog
 
-Your title, introduction, and anything else up here stay yours.
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 <!-- wlz:releases baseline=1.4.2 -->
 
-<!-- BEGIN wlz:release v1.6.0 -->
-## v1.6.0 - 2026-11-17
+<!-- BEGIN wlz:release 1.6.0 -->
+## [`1.6.0`] (2026-11-17)
 
 ### Added
 
 * Support for TOML config
-<!-- END wlz:release v1.6.0 -->
+<!-- END wlz:release 1.6.0 -->
 
-<!-- BEGIN wlz:release v1.5.0 -->
+<!-- BEGIN wlz:release 1.5.0 -->
 ...
-<!-- END wlz:release v1.5.0 -->
+<!-- END wlz:release 1.5.0 -->
 
 ## 1.4.2 - 2025-03-02
 
 Older history from before wandelzeug.
+
+<!-- wlz:links -->
+[`1.6.0`]: https://codeberg.org/owner/repo/compare/v1.5.0...v1.6.0
+[`1.5.0`]: https://codeberg.org/owner/repo/compare/v1.4.2...v1.5.0
 ```
 
-The anchor `<!-- wlz:releases -->` marks where releases go: `batch` inserts each new release directly below it, so the newest release comes first. Each release sits between `BEGIN` and `END` markers that name its version, which is how `latest`, `next`, and `show` find releases without parsing headings. `batch` only ever inserts, so you can fix a typo inside an older release by hand. The changelog changes only when you release, so branches don't conflict over it.
+The anchor `<!-- wlz:releases -->` marks where releases go: `batch` inserts each new release directly below it, so the newest release comes first. Each release sits between `BEGIN` and `END` markers that name its version, which is how `latest`, `next`, and `show` find releases without parsing headings. `batch` only ever inserts, so you can fix a typo inside an older release by hand. The changelog changes only when you release, so branches don't conflict over it. The header above the anchor is yours, and `init` writes the one shown here into a new changelog.
 
 To print the notes of one release, for example for the description of a release on GitHub, run the following command:
 
 ```sh
-wlz show v1.6.0
+wlz show 1.6.0
 ```
 
 The output is the text between the release's markers, including its heading.
 
+### Links
+
+`batch` also inserts a link definition for each release directly below the anchor `<!-- wlz:links -->`, which turns the version in the heading into a link. The default `linkFormat` compares the release with the previous one, the way [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) does, and links the tag of a first release:
+
+```yaml
+linkFormat: "[`{{version}}`]: {{repositoryUrl}}/{{#previousTag}}compare/{{previousTag}}...{{tag}}{{/previousTag}}{{^previousTag}}releases/tag/{{tag}}{{/previousTag}}"
+```
+
+The previous release is the highest earlier version in the changelog or its baseline, so a fix release such as 1.4.3 after 1.5.0 compares with 1.4.2. `{{tag}}` and `{{previousTag}}` carry the `tagPrefix`, which defaults to `v`, because git tags usually do, while release names carry the `versionPrefix`, which defaults to none.
+
+`init` takes `repositoryUrl` from the origin remote of the git repository, turned into an https address, and prints what it found. To choose it yourself, pass `--repository URL`. While `repositoryUrl` is empty, the default links stay off. To turn links off for good, set `linkFormat` to an empty string.
+
+### Keep a Changelog
+
+The default settings follow [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html): the six default kinds are its categories in its order, releases come newest first with an ISO 8601 date, and each version links to its comparison. The headings deliberately differ from its example: ``## [`1.1.2`] (2024-09-27)`` instead of `## [1.1.2] - 2024-09-27`, so the version stands out in a monospaced font. wandelzeug keeps unreleased changes as files in `.changes/unreleased/`, so it doesn't maintain an `## [Unreleased]` section.
+
 ## Onboard an existing changelog
 
-When a `CHANGELOG.md` exists already, `init` only adds the anchor and keeps every other line:
+When a `CHANGELOG.md` exists already, `init` only adds the two anchors and keeps every other line, including your header:
 
-- The anchor goes above the first heading that names a version, such as `## 1.4.2` or `## [1.4.2] - 2025-03-02`. In a [Keep a Changelog](https://keepachangelog.com) file, an `## [Unreleased]` section stays above it.
+- The release anchor goes above the first heading that names a version, such as `## 1.4.2` or `## [1.4.2] - 2025-03-02`. In a [Keep a Changelog](https://keepachangelog.com) file, an `## [Unreleased]` section stays above it.
 - The newest stable version among those headings becomes the `baseline`, which `latest` and `next` use until wandelzeug records its first release. To choose the baseline yourself, pass `--baseline VERSION`.
-- Without any such heading, the anchor goes to the end of the file.
+- The links anchor goes above the first link definition that names a version, so an `[unreleased]: ...` definition stays above it.
+- Without such a heading or definition, the anchor goes to the end of the file.
 
-`init` prints the line of the anchor and the baseline. Both are plain text in the comment, so if a guess is wrong, move the anchor line or edit the baseline by hand.
+`init` prints the lines of the anchors and the baseline. They are plain text, so if a guess is wrong, move an anchor line or edit the baseline by hand.
 
 ## Check changes in CI
 
@@ -193,7 +217,7 @@ The check needs the history of `REF`. With `actions/checkout`, set `fetch-depth:
 
 ## Versions
 
-`batch` takes either a semantic version, such as `1.4.0`, or a bump: `major`, `minor`, `patch`, or `auto`. The `auto` bump picks the most significant bump among the kinds of the unreleased changes. Bumps start from the latest stable release in the changelog, or from the baseline, and skip prereleases. New releases always carry the configured `versionPrefix`, which defaults to `v`.
+`batch` takes either a semantic version, such as `1.4.0`, or a bump: `major`, `minor`, `patch`, or `auto`. The `auto` bump picks the most significant bump among the kinds of the unreleased changes. Bumps start from the latest stable release in the changelog, or from the baseline, and skip prereleases. New releases carry the configured `versionPrefix`, which defaults to none, so a release is named like `1.4.0`.
 
 To see a version without writing anything, use one of the following commands:
 

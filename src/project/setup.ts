@@ -5,15 +5,21 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { anchorMarker, hasAnchor, type Release } from "../changelog/markers.ts";
+import {
+  anchorMarker,
+  hasMarker,
+  LINKS_ANCHOR,
+  type Release,
+} from "../changelog/markers.ts";
 import {
   displayPath,
   readOptionalFile,
   UsageError,
   writeNewFile,
 } from "../shared/foundations.ts";
+import { readOriginUrl, webUrlOfRemote } from "../shared/git.ts";
 import { compareVersions, parseVersion } from "../shared/versions.ts";
-import { CONFIG_FILE } from "./config.ts";
+import { CONFIG_FILE, DEFAULT_CONFIG } from "./config.ts";
 import {
   changelogPath,
   changesPath,
@@ -22,21 +28,43 @@ import {
   unreleasedPath,
 } from "./root.ts";
 
-/** The header that "wlz init" writes into a new changelog. */
-export const INIT_HEADER =
-  "# Changelog\n\nAll notable changes to this project are documented in this file.\n";
+/**
+ * The header that "wlz init" writes into a new changelog. It names the
+ * formats that the default settings follow.
+ */
+export const INIT_HEADER = [
+  "# Changelog",
+  "",
+  "All notable changes to this project are documented in this file.",
+  "",
+  "The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).",
+  "",
+].join("\n");
 
-/** The configuration that "wlz init" writes. It spells out every default. */
-export const INIT_CONFIG = `# Configuration for wandelzeug. Paths are relative to the project root,
+/** Formats a string as a YAML scalar. JSON strings are valid YAML. */
+const yamlString = (text: string): string => JSON.stringify(text);
+
+/**
+ * The configuration that "wlz init" writes. It spells out every default,
+ * and the repository URL that init found.
+ */
+export const initConfig = (
+  repositoryUrl: string,
+): string => `# Configuration for wandelzeug. Paths are relative to the project root,
 # the directory that holds .changes.
 
 # Directory below .changes for unreleased change files.
 unreleasedDir: unreleased
 # Changelog that "wlz batch" adds each release to, right below the
-# <!-- wlz:releases --> anchor.
+# <!-- wlz:releases --> anchor, with its link below <!-- wlz:links -->.
 changelogPath: CHANGELOG.md
-# Prefix for computed versions and the {{version}} value.
-versionPrefix: v
+# Prefix of release names and the {{version}} value, as in "1.1.2".
+versionPrefix: ""
+# Prefix of git tags and the {{tag}} value, as in "v1.1.2".
+tagPrefix: v
+# Web address of the repository for the compare links. While it is empty,
+# the default linkFormat stays off.
+repositoryUrl: ${yamlString(repositoryUrl)}
 
 # Templates use Mustache (https://mustache.github.io/mustache.5.html)
 # without HTML escaping. {{name}} inserts a value, and a section such as
@@ -45,17 +73,18 @@ versionPrefix: v
 # Fragment file name between the "nnn-" sequence prefix and ".md".
 # Values: title from the first body line, kind, and any front matter key
 # such as pr. Every value becomes a lower-case slug.
-fragmentName: "{{kind}}-{{title}}"
+fragmentName: ${yamlString(DEFAULT_CONFIG.fragmentName)}
 # Maximum length of the title slug.
-titleMaxLength: 48
+titleMaxLength: ${DEFAULT_CONFIG.titleMaxLength}
 
-# Heading of a release. Values: version and date.
-versionFormat: "## {{version}} - {{date}}"
+# Heading of a release. Values: version, date, tag, previousVersion and
+# previousTag. The brackets make the version a link to its definition.
+versionFormat: ${yamlString(DEFAULT_CONFIG.versionFormat)}
 # Heading of a kind section. Value: kind.
-kindFormat: "### {{kind}}"
+kindFormat: ${yamlString(DEFAULT_CONFIG.kindFormat)}
 # One change entry. Values: body, kind, and any front matter key, as in
 # "{{body}}{{#pr}} (#{{pr}}){{/pr}}".
-changeFormat: "{{body}}"
+changeFormat: ${yamlString(DEFAULT_CONFIG.changeFormat)}
 
 # The whole release. It places the three formats above as the partials
 # {{> version}}, {{> kind}} and {{> change}}, each as whole lines, and
@@ -71,6 +100,12 @@ releaseTemplate: |
   {{> change}}
   {{/changes}}
   {{/kinds}}
+
+# Link definition of a release, below the <!-- wlz:links --> anchor. It
+# compares the tag with the previous tag, or links the tag of a first
+# release. Values: those of versionFormat and repositoryUrl. An empty
+# linkFormat turns links off.
+linkFormat: ${yamlString(DEFAULT_CONFIG.linkFormat)}
 
 # Kinds in changelog order. A bump lets "auto" pick the next version.
 kinds:
@@ -143,7 +178,10 @@ async function createIfMissing(file: InitFile): Promise<InitResult> {
 }
 
 const RELEASE_HEADING =
-  /^#{1,6}\s+\[?(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)\]?(?:\s|$)/;
+  /^#{1,6}\s+\[?`?(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)`?\]?(?:\s|$)/;
+
+/** A link definition whose label names a version, such as "[1.4.2]: https://...". */
+const VERSION_LINK = /^\[`?v?\d+\.\d+\.\d+[^\]]*\]:\s*\S/;
 
 /** A heading from before wandelzeug that names a version. */
 type LegacyHeading = {
@@ -177,11 +215,32 @@ function insertLinesAt(
   ];
 }
 
-/** A changelog from before wandelzeug with the release anchor added. */
+/**
+ * Adds the links anchor below the release anchor: right above the first
+ * link definition that names a version, so an "[unreleased]" definition
+ * stays on top, or else at the end.
+ */
+function insertLinksAnchor(lines: readonly string[], anchor: number): string[] {
+  const definition = lines.findIndex(
+    (line, index) => index > anchor && VERSION_LINK.test(line),
+  );
+  if (definition === -1) {
+    return insertLinesAt(lines, lines.length, [LINKS_ANCHOR, ""]);
+  }
+  return [
+    ...lines.slice(0, definition),
+    LINKS_ANCHOR,
+    ...lines.slice(definition),
+  ];
+}
+
+/** A changelog from before wandelzeug with the anchors added. */
 export type Onboarding = {
   readonly text: string;
-  /** The line of the anchor, counting from 1. */
+  /** The line of the release anchor, counting from 1. */
   readonly anchorLine: number;
+  /** The line of the links anchor, counting from 1. */
+  readonly linksLine: number;
   readonly baseline: string | undefined;
 };
 
@@ -201,12 +260,12 @@ function pickBaseline(releases: readonly Release[]): Release | undefined {
 }
 
 /**
- * Adds the release anchor to a changelog from before wandelzeug. The anchor
+ * Adds the anchors to a changelog from before wandelzeug. The release anchor
  * goes above the first heading that names a version, such as "## 1.4.2" or
  * "## [1.4.2]". The newest stable version among those headings becomes the
  * baseline unless one is given. Without such a heading, the anchor goes to
- * the end. Apart from the anchor and the blank lines around it, no line
- * changes.
+ * the end. The links anchor follows as insertLinksAnchor describes. Apart
+ * from the anchors and the blank lines around them, no line changes.
  */
 export function onboardChangelog(
   text: string,
@@ -219,22 +278,32 @@ export function onboardChangelog(
 
   const anchor = anchorMarker(baselineName);
   const position = headings[0]?.index ?? lines.length;
-  const result = insertLinesAt(lines, position, [anchor, ""]);
+  const withAnchor = insertLinesAt(lines, position, [anchor, ""]);
+  const result = insertLinksAnchor(withAnchor, withAnchor.indexOf(anchor));
   return {
     text: result.join(text.includes("\r\n") ? "\r\n" : "\n"),
     anchorLine: result.indexOf(anchor) + 1,
+    linksLine: result.indexOf(LINKS_ANCHOR) + 1,
     baseline: baselineName,
   };
 }
 
 const newChangelog = (baseline: string | undefined): string =>
-  `${INIT_HEADER}\n${anchorMarker(baseline)}\n`;
+  `${INIT_HEADER}\n${anchorMarker(baseline)}\n\n${LINKS_ANCHOR}\n`;
 
 /** What init does to the changelog, planned before anything is written. */
 type ChangelogSetup = InitResult & {
   /** The text to write, or undefined to leave the file as it is. */
   readonly content: string | undefined;
 };
+
+function describeOnboarding(onboarding: Onboarding): string {
+  const baseline =
+    onboarding.baseline === undefined
+      ? "without a baseline"
+      : `with baseline ${onboarding.baseline}`;
+  return `added the release anchor on line ${onboarding.anchorLine} ${baseline}, and the links anchor on line ${onboarding.linksLine}`;
+}
 
 async function planChangelogSetup(
   path: string,
@@ -250,16 +319,18 @@ async function planChangelogSetup(
     };
   }
 
-  if (hasAnchor(existing)) {
+  const hasAnchors =
+    hasMarker(existing, "anchor") || hasMarker(existing, "links");
+  if (hasAnchors) {
     if (baseline !== undefined) {
       throw new UsageError(
-        `init: ${displayPath(path)} has a release anchor already, change its baseline there`,
+        `init: ${displayPath(path)} has wlz anchors already, change its baseline there`,
       );
     }
     return {
       path,
       action: "kept",
-      detail: "it has a release anchor already",
+      detail: "it has wlz anchors already",
       content: undefined,
     };
   }
@@ -274,14 +345,10 @@ async function planChangelogSetup(
   }
 
   const onboarding = onboardChangelog(existing, baseline);
-  const baselineNote =
-    onboarding.baseline === undefined
-      ? "without a baseline"
-      : `with baseline ${onboarding.baseline}`;
   return {
     path,
     action: "updated",
-    detail: `added the release anchor on line ${onboarding.anchorLine} ${baselineNote}`,
+    detail: describeOnboarding(onboarding),
     content: onboarding.text,
   };
 }
@@ -298,25 +365,71 @@ async function applyChangelogSetup(setup: ChangelogSetup): Promise<InitResult> {
   };
 }
 
+/** The repository URL for the configuration, and how init found it. */
+type RepositorySource = {
+  readonly url: string;
+  readonly note: string;
+};
+
+/**
+ * Picks the repository URL: the given one, or the web address of the origin
+ * remote. It never repeats the remote itself, which may hold credentials.
+ */
+async function findRepositoryUrl(
+  directory: string,
+  given: string | undefined,
+): Promise<RepositorySource> {
+  if (given !== undefined) {
+    return { url: given, note: `repositoryUrl ${given} from --repository` };
+  }
+
+  const remote = await readOriginUrl(directory);
+  const url = remote === undefined ? undefined : webUrlOfRemote(remote);
+  if (url !== undefined) {
+    return { url, note: `repositoryUrl ${url} from the origin remote` };
+  }
+  const reason =
+    remote === undefined
+      ? "no origin remote"
+      : "the origin remote has no web address";
+  return {
+    url: "",
+    note: `${reason}, so links stay off until you set repositoryUrl`,
+  };
+}
+
+/** The choices of "wlz init" that override what it would detect. */
+export type InitOptions = {
+  /** The newest release from before wandelzeug. */
+  readonly baseline?: Release | undefined;
+  /** The web address of the repository for compare links. */
+  readonly repositoryUrl?: string | undefined;
+};
+
 /**
  * Sets up wandelzeug in a directory: the configuration, the unreleased
- * directory, and a changelog with the release anchor. An existing changelog
- * only gets the anchor added, as onboardChangelog describes. Fails when a
+ * directory, and a changelog with the anchors. An existing changelog only
+ * gets the anchors added, as onboardChangelog describes. Fails when a
  * configuration exists already, before it writes anything.
  */
 export async function initProject(
   directory: string,
-  baseline?: Release,
+  options: InitOptions = {},
 ): Promise<InitResult[]> {
   const configPath = join(directory, CONFIG_FILE);
   if (await Bun.file(configPath).exists()) {
     throw new Error(`init: ${displayPath(configPath)} exists already`);
   }
 
-  const project = createProject(directory, Bun.YAML.parse(INIT_CONFIG));
-  const changelog = await planChangelogSetup(changelogPath(project), baseline);
+  const repository = await findRepositoryUrl(directory, options.repositoryUrl);
+  const config = initConfig(repository.url);
+  const project = createProject(directory, Bun.YAML.parse(config));
+  const changelog = await planChangelogSetup(
+    changelogPath(project),
+    options.baseline,
+  );
   await mkdir(dirname(configPath), { recursive: true });
-  await writeFile(configPath, INIT_CONFIG, { flag: "wx" });
+  await writeFile(configPath, config, { flag: "wx" });
   await mkdir(unreleasedPath(project), { recursive: true });
 
   const files: readonly InitFile[] = [
@@ -331,7 +444,7 @@ export async function initProject(
   ];
   const results = await Promise.all(files.map(createIfMissing));
   return [
-    { path: configPath, action: "created", detail: undefined },
+    { path: configPath, action: "created", detail: repository.note },
     ...results,
     await applyChangelogSetup(changelog),
   ];

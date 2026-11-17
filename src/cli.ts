@@ -110,6 +110,8 @@ Options for init:
                           The newest release from before wandelzeug, for an
                           existing changelog (default: the newest stable
                           version among its headings)
+      --repository <url>  The web address of the repository for compare
+                          links (default: from the origin remote)
 
 Options for new:
   -k, --kind <kind>       Kind of change, such as Added
@@ -140,6 +142,7 @@ const GLOBAL_OPTIONS = {
 
 const INIT_OPTIONS = {
   baseline: { type: "string" },
+  repository: { type: "string" },
 } as const satisfies ParseArgsOptionsConfig;
 
 const NEW_OPTIONS = {
@@ -236,6 +239,19 @@ const formatInitResult = (result: InitResult): string => {
   return `${result.action} ${displayPath(result.path)}${detail}`;
 };
 
+/** Parses the --repository option of init, an http or https address. */
+function parseRepositoryOption(option: string): string {
+  const isWebAddress =
+    URL.canParse(option) &&
+    ["https:", "http:"].includes(new URL(option).protocol);
+  if (!isWebAddress) {
+    throw new UsageError(
+      `invalid --repository ${JSON.stringify(option)}, expected an http or https address`,
+    );
+  }
+  return option.replace(/\/+$/, "");
+}
+
 async function runInit(args: string[]): Promise<void> {
   const { values, positionals } = parseCommand(args, INIT_OPTIONS);
   expectNoPositionals("init", positionals);
@@ -243,7 +259,12 @@ async function runInit(args: string[]): Promise<void> {
     values.baseline === undefined
       ? undefined
       : parseVersionOption("--baseline", values.baseline);
-  const results = await initProject(resolve(values.directory ?? "."), baseline);
+  const repositoryUrl =
+    values.repository === undefined
+      ? undefined
+      : parseRepositoryOption(values.repository);
+  const directory = resolve(values.directory ?? ".");
+  const results = await initProject(directory, { baseline, repositoryUrl });
   results.forEach((result) => console.log(formatInitResult(result)));
 }
 
@@ -351,7 +372,8 @@ async function runBatch(args: string[]): Promise<void> {
   const project = await openProject(values.directory ?? ".");
   const plan = await planRelease(project, target, date);
   if (values["dry-run"]) {
-    process.stdout.write(`${plan.section}\n`);
+    const link = plan.link === undefined ? "" : `\n${plan.link}\n`;
+    process.stdout.write(`${plan.section}\n${link}`);
     return;
   }
 

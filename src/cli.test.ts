@@ -86,7 +86,7 @@ describe("command line", () => {
   });
 
   test("batch --dry-run prints the release and keeps the fragments", async () => {
-    await run("init");
+    await run("init", "--repository", "https://codeberg.org/o/r/");
     await run("new", "-k", "Added", "-b", "* Feature");
     const result = await run(
       "batch",
@@ -98,13 +98,15 @@ describe("command line", () => {
     expect(result).toMatchObject({
       exitCode: 0,
       stdout: [
-        "<!-- BEGIN wlz:release v0.1.0 -->",
-        "## v0.1.0 - 2026-11-17",
+        "<!-- BEGIN wlz:release 0.1.0 -->",
+        "## [`0.1.0`] (2026-11-17)",
         "",
         "### Added",
         "",
         "* Feature",
-        "<!-- END wlz:release v0.1.0 -->",
+        "<!-- END wlz:release 0.1.0 -->",
+        "",
+        "[`0.1.0`]: https://codeberg.org/o/r/releases/tag/v0.1.0",
         "",
       ].join("\n"),
     });
@@ -112,28 +114,42 @@ describe("command line", () => {
       "001-added-feature.md",
     );
     expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).not.toContain(
-      "v0.1.0",
+      "0.1.0",
     );
   });
 
   test("next and latest start from the baseline of an onboarded changelog", async () => {
     await writeFile(join(root, "CHANGELOG.md"), "# History\n\n## [1.2.3]\n");
     expect((await run("init")).stdout).toContain(
-      "updated CHANGELOG.md (added the release anchor on line 3 with baseline 1.2.3)",
+      "updated CHANGELOG.md (added the release anchor on line 3 with baseline 1.2.3, and the links anchor on line 7)",
     );
     expect((await run("latest")).stdout).toBe("1.2.3\n");
-    expect((await run("next", "major")).stdout).toBe("v2.0.0\n");
+    expect((await run("next", "major")).stdout).toBe("2.0.0\n");
+  });
+
+  test("init takes the repository URL from the origin remote", async () => {
+    await git(root, "init", "--quiet");
+    await git(root, "remote", "add", "origin", "git@codeberg.org:o/r.git");
+    expect((await run("init")).stdout).toContain(
+      "created .changes/config.yaml (repositoryUrl https://codeberg.org/o/r from the origin remote)",
+    );
+  });
+
+  test("init without an origin remote leaves links off", async () => {
+    expect((await run("init")).stdout).toContain(
+      "created .changes/config.yaml (no origin remote, so links stay off until you set repositoryUrl)",
+    );
   });
 
   test("show prints the notes of a release", async () => {
     await run("init", "--baseline", "1.0.0");
     await run("new", "-k", "Fixed", "-b", "* Crash");
     await run("batch", "patch", "--date", "2026-11-17");
-    expect((await run("latest")).stdout).toBe("v1.0.1\n");
+    expect((await run("latest")).stdout).toBe("1.0.1\n");
 
     expect(await run("show", "1.0.1")).toMatchObject({
       exitCode: 0,
-      stdout: "## v1.0.1 - 2026-11-17\n\n### Fixed\n\n* Crash\n",
+      stdout: "## [`1.0.1`] (2026-11-17)\n\n### Fixed\n\n* Crash\n",
     });
     const baseline = await run("show", "1.0.0");
     expect(baseline.exitCode).toBe(1);
@@ -153,6 +169,7 @@ describe("command line", () => {
     [["batch", "1.0"], /invalid version "1\.0"/],
     [["next", "huge"], /next: invalid bump "huge"/],
     [["latest", "--nope"], /Unknown option '--nope'/],
+    [["init", "--repository", "codeberg.org/o/r"], /invalid --repository/],
   ])("%p is a usage error", async (args, message) => {
     await run("init");
     const result = await run(...args);

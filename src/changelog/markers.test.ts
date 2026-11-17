@@ -4,6 +4,7 @@ import {
   anchorMarker,
   insertRelease,
   knownReleases,
+  LINKS_ANCHOR,
   parseChangelog,
   releaseNotes,
 } from "./markers.ts";
@@ -84,13 +85,69 @@ describe("changelog markers", () => {
     [[anchor, begin("latest")], 'line 2: invalid version "latest"'],
     [
       [anchor, "<!-- wlz:relase v1.0.0 -->"],
-      "line 2: unknown wlz marker, expected the release anchor or BEGIN or END wlz:release VERSION",
+      "line 2: unknown wlz marker, expected an anchor or BEGIN or END wlz:release VERSION",
     ],
   ];
 
   test.each(broken)("parseChangelog rejects %p with %p", (lines, problem) => {
     const parsed = parseChangelog(lines.join("\n"));
     expect(parsed.ok ? [] : parsed.problems).toContain(problem);
+  });
+
+  test("parseChangelog finds the links anchor below the release anchor", () => {
+    const text = [anchor, "", "## 1.0.0", "", LINKS_ANCHOR, "[1.0.0]: x"];
+    expect(changelogDocument(text.join("\n")).links).toBe(4);
+    expect(changelogDocument(anchor).links).toBeUndefined();
+  });
+
+  const misplacedLinks: [string[], string][] = [
+    [
+      [anchor, LINKS_ANCHOR, LINKS_ANCHOR],
+      "line 3: second links anchor, the first is on line 2",
+    ],
+    [
+      [LINKS_ANCHOR, anchor],
+      "line 1: the links anchor must come after the release anchor",
+    ],
+    [
+      [anchor, begin("v1.0.0"), LINKS_ANCHOR, end("v1.0.0")],
+      "line 3: links anchor inside release v1.0.0",
+    ],
+  ];
+
+  test.each(misplacedLinks)(
+    "parseChangelog rejects %p with %p",
+    (lines, problem) => {
+      const parsed = parseChangelog(lines.join("\n"));
+      expect(parsed.ok ? [] : parsed.problems).toContain(problem);
+    },
+  );
+
+  test("insertRelease adds the link below the links anchor, newest first", () => {
+    const text = [anchor, "", LINKS_ANCHOR, "[`1.0.0`]: old", ""].join("\n");
+    const inserted = insertRelease(
+      changelogDocument(text),
+      "S",
+      "[`1.1.0`]: new",
+    );
+    expect(inserted).toBe(
+      [
+        anchor,
+        "",
+        "S",
+        "",
+        LINKS_ANCHOR,
+        "[`1.1.0`]: new",
+        "[`1.0.0`]: old",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("insertRelease needs the links anchor for a link", () => {
+    expect(() =>
+      insertRelease(changelogDocument(anchor), "S", "[x]: y"),
+    ).toThrow("no <!-- wlz:links --> anchor for the link definition");
   });
 
   test("text between the markers stays opaque", () => {
@@ -134,7 +191,9 @@ describe("changelog markers", () => {
   ])(
     "insertRelease places the release below the anchor when %s",
     (_, text, expected) => {
-      expect(insertRelease(changelogDocument(text), section)).toBe(expected);
+      expect(insertRelease(changelogDocument(text), section, undefined)).toBe(
+        expected,
+      );
     },
   );
 });

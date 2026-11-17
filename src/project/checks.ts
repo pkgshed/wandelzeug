@@ -13,6 +13,7 @@ import {
   readOptionalFile,
 } from "../shared/foundations.ts";
 import type { Config } from "./config.ts";
+import { runGit } from "../shared/git.ts";
 import { changelogPath, type Project, unreleasedPath } from "./root.ts";
 
 /** A problem that "wlz check" found in a fragment file. */
@@ -85,29 +86,6 @@ export type GitRef = string & { readonly __brand: "GitRef" };
 export function parseGitRef(text: string): GitRef | undefined {
   const isOptionLike = text.startsWith("-");
   return text === "" || isOptionLike ? undefined : (text as GitRef);
-}
-
-/** Runs git in a directory and returns its standard output. */
-async function runGit(
-  directory: string,
-  args: readonly string[],
-): Promise<string> {
-  const child = Bun.spawn(["git", ...args], {
-    cwd: directory,
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, stderr, status] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  if (status !== 0) {
-    const reason = stderr.trim() || `exit status ${status}`;
-    throw new Error(`git ${args.join(" ")}: ${reason}`);
-  }
-  return stdout;
 }
 
 /**

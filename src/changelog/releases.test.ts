@@ -1,0 +1,77 @@
+import { describe, expect, test } from "bun:test";
+import { isoDate, projectWith, release, version } from "../test-helpers.ts";
+import { previousRelease, releaseValues, renderLink } from "./releases.ts";
+
+describe("release values", () => {
+  const releases = [release("1.5.0"), release("1.4.2"), release("1.4.1")];
+
+  test.each([
+    ["1.6.0", "1.5.0"],
+    ["1.4.3", "1.4.2"],
+    ["2.0.0-rc.1", "1.5.0"],
+    ["1.0.0", undefined],
+  ])("the release before %p is %p", (next, expected) => {
+    expect(previousRelease(releases, version(next))?.name).toBe(expected);
+  });
+
+  test("names and tags carry their own prefixes", () => {
+    const config = projectWith({ versionPrefix: "", tagPrefix: "v" }).config;
+    expect(
+      releaseValues(config, version("1.4.3"), isoDate("2026-11-17"), releases),
+    ).toEqual({
+      version: "1.4.3",
+      date: isoDate("2026-11-17"),
+      tag: "v1.4.3",
+      previousVersion: "1.4.2",
+      previousTag: "v1.4.2",
+    });
+  });
+
+  test("a first release has no predecessor", () => {
+    const config = projectWith({}).config;
+    const values = releaseValues(
+      config,
+      version("0.1.0"),
+      isoDate("2026-11-17"),
+      [],
+    );
+    expect(values.previousVersion).toBeUndefined();
+    expect(values.previousTag).toBeUndefined();
+  });
+});
+
+describe("links", () => {
+  const values = {
+    version: "1.1.2",
+    date: isoDate("2024-09-27"),
+    tag: "v1.1.2",
+    previousVersion: "1.1.1",
+    previousTag: "v1.1.1",
+  };
+
+  test("the default link compares with the previous tag", () => {
+    const project = projectWith({ repositoryUrl: "https://codeberg.org/o/r/" });
+    expect(renderLink(project, values)).toBe(
+      "[`1.1.2`]: https://codeberg.org/o/r/compare/v1.1.1...v1.1.2",
+    );
+  });
+
+  test.each([
+    ["the repository URL is empty", {}],
+    [
+      "linkFormat is empty",
+      { repositoryUrl: "https://x.invalid", linkFormat: "" },
+    ],
+  ])("links are off when %s", (_, settings) => {
+    expect(renderLink(projectWith(settings), values)).toBeUndefined();
+  });
+
+  test("a link format with its own address works without a repository URL", () => {
+    const project = projectWith({
+      linkFormat: "[`{{version}}`]: https://example.invalid/tags/{{tag}}",
+    });
+    expect(renderLink(project, values)).toBe(
+      "[`1.1.2`]: https://example.invalid/tags/v1.1.2",
+    );
+  });
+});

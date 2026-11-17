@@ -87,8 +87,12 @@ export type Config = {
   readonly unreleasedDir: string;
   /** Changelog that "wlz batch" adds releases to. */
   readonly changelogPath: string;
-  /** Prefix for computed versions and the {{version}} value, such as "v". */
+  /** Prefix of release names and the {{version}} value. Empty by default, as in "1.1.2". */
   readonly versionPrefix: string;
+  /** Prefix of git tags and the {{tag}} value, such as "v" in "v1.1.2". */
+  readonly tagPrefix: string;
+  /** Web address of the repository for compare links. Empty turns the default links off. */
+  readonly repositoryUrl: string;
   /** Mustache template for the fragment file name between "nnn-" and ".md". */
   readonly fragmentName: string;
   /** Maximum length of the {{title}} slug in fragment file names. */
@@ -101,6 +105,8 @@ export type Config = {
   readonly changeFormat: string;
   /** Mustache template for a whole release, which places the formats as partials. */
   readonly releaseTemplate: string;
+  /** Mustache template for the link definition of a release. Empty turns links off. */
+  readonly linkFormat: string;
   /** Kinds in changelog order. */
   readonly kinds: readonly Kind[];
   /** Front matter entries that "new" asks for and "check" validates. */
@@ -122,17 +128,27 @@ export const DEFAULT_RELEASE_TEMPLATE = `{{> version}}
 {{/kinds}}
 `;
 
+/**
+ * The link definition of a release in the style of Keep a Changelog: a
+ * comparison with the previous tag, or the tag itself for a first release.
+ */
+export const DEFAULT_LINK_FORMAT =
+  "[`{{version}}`]: {{repositoryUrl}}/{{#previousTag}}compare/{{previousTag}}...{{tag}}{{/previousTag}}{{^previousTag}}releases/tag/{{tag}}{{/previousTag}}";
+
 /** The settings that apply when .changes/config.yaml leaves them out. */
 export const DEFAULT_CONFIG: Config = {
   unreleasedDir: "unreleased",
   changelogPath: "CHANGELOG.md",
-  versionPrefix: "v",
+  versionPrefix: "",
+  tagPrefix: "v",
+  repositoryUrl: "",
   fragmentName: "{{kind}}-{{title}}",
   titleMaxLength: 48,
-  versionFormat: "## {{version}} - {{date}}",
+  versionFormat: "## [`{{version}}`] ({{date}})",
   kindFormat: "### {{kind}}",
   changeFormat: "{{body}}",
   releaseTemplate: DEFAULT_RELEASE_TEMPLATE,
+  linkFormat: DEFAULT_LINK_FORMAT,
   kinds: [
     {
       label: "Added",
@@ -451,12 +467,15 @@ export function parseConfig(raw: unknown): Config {
     unreleasedDir: readString(settings, "unreleasedDir"),
     changelogPath: readString(settings, "changelogPath"),
     versionPrefix: readString(settings, "versionPrefix"),
+    tagPrefix: readString(settings, "tagPrefix"),
+    repositoryUrl: readString(settings, "repositoryUrl"),
     fragmentName: readString(settings, "fragmentName"),
     titleMaxLength: readTitleMaxLength(settings),
     versionFormat: readString(settings, "versionFormat"),
     kindFormat: readString(settings, "kindFormat"),
     changeFormat: readString(settings, "changeFormat"),
     releaseTemplate: readString(settings, "releaseTemplate"),
+    linkFormat: readString(settings, "linkFormat"),
     kinds: readKinds(settings),
     extraFields: readExtraFields(settings),
   };
