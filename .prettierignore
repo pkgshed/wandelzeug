@@ -1,0 +1,3 @@
+# Prettier would rewrite the change file examples inside fenced code blocks,
+# such as "* Added" into "- Added", which misstates the fragment format.
+*.md

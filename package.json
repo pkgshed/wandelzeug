@@ -1,0 +1,20 @@
+{
+  "name": "wandelzeug",
+  "description": "Records changelog entries as Markdown files and adds them to CHANGELOG.md as releases",
+  "license": "0BSD",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "wlz": "./src/cli.ts"
+  },
+  "packageManager": "bun@1.4.4",
+  "devDependencies": {
+    "@types/bun": "1.4.4",
+    "@types/mustache": "4.2.6",
+    "prettier": "3.10.1",
+    "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "mustache": "4.2.0"
+  }
+}

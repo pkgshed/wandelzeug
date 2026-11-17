@@ -1,0 +1,364 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  parseReleaseTarget,
+  planRelease,
+  removeFragments,
+  writeRelease,
+} from "./changelog/releases.ts";
+import { loadFragments, recordChange } from "./changes/fragments.ts";
+import {
+  changedFragments,
+  checkProject,
+  parseGitRef,
+} from "./project/checks.ts";
+import { loadProject, openProject } from "./project/root.ts";
+import { INIT_HEADER, initProject, type InitResult } from "./project/setup.ts";
+import {
+  change,
+  commitAll,
+  git,
+  gitRef,
+  isoDate,
+  PR_FIELD_CONFIG,
+  release,
+  startRepository,
+  writeChangelog,
+  writeConfig,
+} from "./test-helpers.ts";
+
+describe("project workflow", () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "wandelzeug-"));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const unreleasedFiles = async (): Promise<string[]> =>
+    (await readdir(join(root, ".changes", "unreleased"))).sort();
+
+  test("init, new and batch add releases to the changelog", async () => {
+    await initProject(root);
+    const project = await loadProject(root);
+    await recordChange(
+      project,
+      change("Fixed", "* Crash on empty input", { pr: 7 }),
+    );
+    await recordChange(project, change("Added", "* Support for TOML config"));
+    await recordChange(project, change("Added", "* A dry-run flag for batch"));
+    expect(await unreleasedFiles()).toEqual([
+      ".gitkeep",
+      "001-fixed-crash-on-empty-input.md",
+      "002-added-support-for-toml-config.md",
+      "003-added-a-dry-run-flag-for-batch.md",
+    ]);
+
+    const first = await planRelease(
+      project,
+      parseReleaseTarget("auto"),
+      isoDate("2026-11-17"),
+    );
+    const firstSection = [
+      "<!-- BEGIN wlz:release v0.1.0 -->",
+      "## v0.1.0 - 2026-11-17",
+      "",
+      "### Added",
+      "",
+      "* Support for TOML config",
+      "* A dry-run flag for batch",
+      "",
+      "### Fixed",
+      "",
+      "* Crash on empty input",
+      "<!-- END wlz:release v0.1.0 -->",
+    ].join("\n");
+    expect(first.path).toBe(join(root, "CHANGELOG.md"));
+    expect(first.section).toBe(firstSection);
+    await writeRelease(first);
+    await removeFragments(first.fragments);
+    expect(await unreleasedFiles()).toEqual([".gitkeep"]);
+
+    await recordChange(project, change("Fixed", "* Hang on exit"));
+    const second = await planRelease(
+      project,
+      parseReleaseTarget("patch"),
+      isoDate("2026-11-18"),
+    );
+    await writeRelease(second);
+
+    expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toBe(
+      [
+        INIT_HEADER,
+        "<!-- wlz:releases -->",
+        "",
+        "<!-- BEGIN wlz:release v0.1.1 -->",
+        "## v0.1.1 - 2026-11-18",
+        "",
+        "### Fixed",
+        "",
+        "* Hang on exit",
+        "<!-- END wlz:release v0.1.1 -->",
+        "",
+        firstSection,
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("the change format can link front matter values", async () => {
+    await writeConfig(
+      root,
+      'changeFormat: "{{body}}{{#pr}} (#{{pr}}){{/pr}}"\n',
+    );
+    await writeChangelog(root);
+    const project = await loadProject(root);
+    await recordChange(project, change("Fixed", "* Crash", { pr: 7 }));
+    await recordChange(project, change("Fixed", "* Hang"));
+
+    const plan = await planRelease(
+      project,
+      parseReleaseTarget("1.0.0"),
+      isoDate("2026-11-17"),
+    );
+    expect(plan.section).toContain("### Fixed\n\n* Crash (#7)\n* Hang\n");
+  });
+
+  test("a release template can replace the whole layout", async () => {
+    const releaseTemplate = [
+      "# Release {{version}}",
+      "{{#kinds}}",
+      "{{#changes}}",
+      "- [{{kind}}] {{body}}{{#breaking}} (breaking){{/breaking}}",
+      "{{/changes}}",
+      "{{/kinds}}",
+      "",
+    ].join("\n");
+    await writeConfig(root, Bun.YAML.stringify({ releaseTemplate }));
+    await writeChangelog(root);
+    const project = await loadProject(root);
+    await recordChange(
+      project,
+      change("Changed", "API renamed", { breaking: true }),
+    );
+    await recordChange(project, change("Fixed", "Crash"));
+
+    const plan = await planRelease(
+      project,
+      parseReleaseTarget("2.0.0"),
+      isoDate("2026-11-17"),
+    );
+    expect(plan.section).toBe(
+      [
+        "<!-- BEGIN wlz:release v2.0.0 -->",
+        "# Release v2.0.0",
+        "- [Changed] API renamed (breaking)",
+        "- [Fixed] Crash",
+        "<!-- END wlz:release v2.0.0 -->",
+      ].join("\n"),
+    );
+  });
+
+  test("a release template can keep the formats as partials", async () => {
+    const releaseTemplate =
+      "{{> version}}\n{{#kinds}}\n{{#changes}}\n{{> change}}\n{{/changes}}\n{{/kinds}}\n";
+    await writeConfig(
+      root,
+      Bun.YAML.stringify({ releaseTemplate, changeFormat: "- {{body}}" }),
+    );
+    await writeChangelog(root);
+    const project = await loadProject(root);
+    await recordChange(project, change("Added", "Feature"));
+    await recordChange(project, change("Fixed", "Crash"));
+
+    const plan = await planRelease(
+      project,
+      parseReleaseTarget("1.1.0"),
+      isoDate("2026-11-17"),
+    );
+    expect(plan.section).toContain(
+      "## v1.1.0 - 2026-11-17\n- Feature\n- Crash\n<!-- END",
+    );
+  });
+
+  test.each([
+    [
+      "a marked release",
+      "<!-- BEGIN wlz:release v1.0.0 -->\n<!-- END wlz:release v1.0.0 -->",
+    ],
+    ["the baseline", ""],
+  ])("batch refuses a version that %s has already", async (_, lines) => {
+    await initProject(root, release("1.0.0"));
+    if (lines !== "") await writeChangelog(root, lines);
+    const project = await loadProject(root);
+    await recordChange(project, change("Fixed", "* Crash"));
+
+    const attempt = planRelease(
+      project,
+      parseReleaseTarget("1.0.0"),
+      isoDate("2026-11-17"),
+    );
+    await expect(attempt).rejects.toThrow(/release v?1\.0\.0 exists already/);
+  });
+
+  test("batch needs the anchor in the changelog", async () => {
+    await initProject(root);
+    await writeFile(join(root, "CHANGELOG.md"), "# Changelog\n");
+    const project = await loadProject(root);
+    await recordChange(project, change("Fixed", "* Crash"));
+
+    const attempt = planRelease(
+      project,
+      parseReleaseTarget("patch"),
+      isoDate("2026-11-17"),
+    );
+    await expect(attempt).rejects.toThrow(
+      /CHANGELOG\.md: no <!-- wlz:releases --> anchor/,
+    );
+  });
+
+  test("batch refuses an empty unreleased directory", async () => {
+    await initProject(root);
+    const project = await loadProject(root);
+    await expect(
+      planRelease(project, parseReleaseTarget("patch"), isoDate("2026-11-17")),
+    ).rejects.toThrow(/no unreleased changes/);
+  });
+
+  test("batch names the fragment that fails to parse", async () => {
+    await initProject(root);
+    const project = await loadProject(root);
+    await writeFile(
+      join(root, ".changes", "unreleased", "001-broken.md"),
+      "* no front matter\n",
+    );
+    await expect(loadFragments(project)).rejects.toThrow(
+      /001-broken\.md: missing front matter/,
+    );
+  });
+
+  test("init refuses an existing configuration", async () => {
+    await initProject(root);
+    await expect(initProject(root)).rejects.toThrow(
+      /\.changes\/config\.yaml exists already/,
+    );
+  });
+
+  const changelogResult = (results: readonly InitResult[]) =>
+    results.find((result) => result.path.endsWith("CHANGELOG.md"));
+
+  test("init onboards an existing changelog", async () => {
+    await writeFile(
+      join(root, "CHANGELOG.md"),
+      "# History\n\n## 1.4.2\n\n* Fix\n",
+    );
+    const results = await initProject(root);
+    expect(changelogResult(results)).toEqual({
+      path: join(root, "CHANGELOG.md"),
+      action: "updated",
+      detail: "added the release anchor on line 3 with baseline 1.4.2",
+    });
+    expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toBe(
+      "# History\n\n<!-- wlz:releases baseline=1.4.2 -->\n\n## 1.4.2\n\n* Fix\n",
+    );
+  });
+
+  test("init keeps a changelog that has the anchor already", async () => {
+    await writeChangelog(root);
+    const before = await readFile(join(root, "CHANGELOG.md"), "utf8");
+    const results = await initProject(root);
+    expect(changelogResult(results)?.action).toBe("kept");
+    expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toBe(before);
+  });
+
+  test("init refuses a baseline for a changelog with an anchor", async () => {
+    await writeChangelog(root);
+    await expect(initProject(root, release("2.0.0"))).rejects.toThrow(
+      /has a release anchor already, change its baseline there/,
+    );
+    expect(await Bun.file(join(root, ".changes", "config.yaml")).exists()).toBe(
+      false,
+    );
+  });
+
+  test("openProject finds the configuration in a parent directory", async () => {
+    await initProject(root);
+    const nested = join(root, "src", "deep");
+    await mkdir(nested, { recursive: true });
+    expect((await openProject(nested)).root).toBe(root);
+  });
+
+  test("checkProject reports every problem with its file", async () => {
+    await writeConfig(root, PR_FIELD_CONFIG);
+    await writeChangelog(root, "<!-- END wlz:release v1.0.0 -->");
+    const project = await loadProject(root);
+    const unreleased = join(root, ".changes", "unreleased");
+    await recordChange(project, change("Fixed", "* Crash", { pr: 7 }));
+    await writeFile(join(unreleased, "002-broken.md"), "* no front matter\n");
+    await writeFile(
+      join(unreleased, "003-no-pr.md"),
+      "---\nkind: Added\n---\n* Feature\n",
+    );
+
+    expect(await checkProject(project)).toEqual({
+      checked: 3,
+      problems: [
+        {
+          path: join(unreleased, "002-broken.md"),
+          message: 'missing front matter, the first line must be "---"',
+        },
+        {
+          path: join(unreleased, "003-no-pr.md"),
+          message: 'missing required field "pr"',
+        },
+        {
+          path: join(root, "CHANGELOG.md"),
+          message: "line 5: END of v1.0.0 without a BEGIN",
+        },
+      ],
+    });
+  });
+
+  test("checkProject reports a missing changelog", async () => {
+    await writeConfig(root, "");
+    const project = await loadProject(root);
+    expect((await checkProject(project)).problems).toEqual([
+      {
+        path: join(root, "CHANGELOG.md"),
+        message: 'no such file, run "wlz init" to create it',
+      },
+    ]);
+  });
+
+  test("changedFragments lists committed fragments since the fork point", async () => {
+    await initProject(root);
+    await startRepository(root);
+    await git(root, "switch", "--quiet", "--create", "feature");
+    const project = await loadProject(root);
+    expect(await changedFragments(project, gitRef("main"))).toEqual([]);
+
+    await recordChange(project, change("Fixed", "* Crash"));
+    expect(await changedFragments(project, gitRef("main"))).toEqual([]);
+
+    await commitAll(root, "record a change");
+    expect(await changedFragments(project, gitRef("main"))).toEqual([
+      ".changes/unreleased/001-fixed-crash.md",
+    ]);
+  });
+
+  test.each(["", "-x", "--output=/tmp/x"])("parseGitRef rejects %p", (text) => {
+    expect(parseGitRef(text)).toBeUndefined();
+  });
+});
