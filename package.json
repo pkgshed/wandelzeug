@@ -1,5 +1,6 @@
 {
   "name": "wandelzeug",
+  "version": "0.0.0",
   "description": "Records changelog entries as Markdown files and adds them to CHANGELOG.md as releases",
   "license": "0BSD",
   "private": true,

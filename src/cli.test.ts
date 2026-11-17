@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { version as packageVersion } from "../package.json" with { type: "json" };
 import {
   commitAll,
   git,
@@ -79,6 +80,13 @@ describe("command line", () => {
       ].join("\n"),
     );
   }
+
+  test("--version prints the version of the package", async () => {
+    expect(await run("--version")).toMatchObject({
+      exitCode: 0,
+      stdout: `${packageVersion}\n`,
+    });
+  });
 
   test("new records a fragment from options", async () => {
     await run("init");

@@ -25,6 +25,7 @@
 
 import { resolve } from "node:path";
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
+import { version as WANDELZEUG_VERSION } from "../package.json" with { type: "json" };
 import {
   type ChangelogDocument,
   knownReleases,
@@ -82,6 +83,7 @@ import {
 } from "./shared/versions.ts";
 
 const USAGE = `Usage: wlz <command> [options]
+       wlz --version
 
 Records changes as Markdown fragments with YAML front matter and adds them
 to the changelog as releases.
@@ -547,6 +549,10 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
   if (command === "help" || wantsHelp(argv)) {
     console.log(USAGE);
+    return 0;
+  }
+  if (command === "--version") {
+    console.log(WANDELZEUG_VERSION);
     return 0;
   }
 

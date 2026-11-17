@@ -12,6 +12,7 @@ bun add -g git+REPOSITORY_URL
 
 Replace `REPOSITORY_URL` with the HTTPS address of the wandelzeug repository. Bun links `wlz` into `~/.bun/bin`, which must be on your `PATH`.
 
+- To see the installed version, run `wlz --version`.
 - To update to the newest commit, run `bun update -g wandelzeug`. Running `bun add -g` again keeps the installed commit.
 - To uninstall, run `bun remove -g wandelzeug`.
 - To work on wandelzeug itself, run `bun link` in a checkout. `wlz` then runs the code of the checkout until you run `bun unlink`.
