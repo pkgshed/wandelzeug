@@ -7,10 +7,10 @@ wandelzeug records each changelog entry as its own small Markdown file and adds 
 wandelzeug needs Bun 1.3 or later. To install the `wlz` command globally, run the following command:
 
 ```sh
-bun add -g git+REPOSITORY_URL
+bun add -g git+https://github.com/pkgshed/wandelzeug.git
 ```
 
-Replace `REPOSITORY_URL` with the HTTPS address of the wandelzeug repository. Bun links `wlz` into `~/.bun/bin`, which must be on your `PATH`.
+Bun links `wlz` into `~/.bun/bin`, which must be on your `PATH`.
 
 - To see the installed version, run `wlz --version`.
 - To update to the newest commit, run `bun update -g wandelzeug`. Running `bun add -g` again keeps the installed commit.

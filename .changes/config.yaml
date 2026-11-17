@@ -12,7 +12,7 @@ versionPrefix: ""
 tagPrefix: v
 # Web address of the repository for the compare links. While it is empty,
 # the default linkFormat stays off.
-repositoryUrl: ""
+repositoryUrl: "https://github.com/pkgshed/wandelzeug"
 
 # Templates use Mustache (https://mustache.github.io/mustache.5.html)
 # without HTML escaping. {{name}} inserts a value, and a section such as

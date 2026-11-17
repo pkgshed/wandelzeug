@@ -23,3 +23,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 <!-- END wlz:release 0.1.0 -->
 
 <!-- wlz:links -->
+[`0.1.0`]: https://github.com/pkgshed/wandelzeug/releases/tag/v0.1.0
