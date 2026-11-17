@@ -6,6 +6,12 @@ describe("slugs and titles", () => {
     ["Support for TOML config", "support-for-toml-config"],
     ["Fix `--dry-run` crash!", "fix-dry-run-crash"],
     ["Café déjà vu", "cafe-deja-vu"],
+    ["Größe ändern für Übergänge", "groesse-aendern-fuer-uebergaenge"],
+    ["Add TypeScript types", "add-typescript-types"],
+    ["Crash & burn", "crash-and-burn"],
+    ["Привет мир", "privet-mir"],
+    ["日本語のテキスト", "日本語のテキスト"],
+    ["cli, docs", "cli-docs"],
     ["  ---  ", ""],
   ])("slugify(%p) is %p", (text, expected) => {
     expect(slugify(text)).toBe(expected);

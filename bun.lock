@@ -5,6 +5,7 @@
     "": {
       "name": "wandelzeug",
       "dependencies": {
+        "@sindresorhus/slugify": "4.0.1",
         "mustache": "4.2.0",
       },
       "devDependencies": {
@@ -16,6 +17,10 @@
     },
   },
   "packages": {
+    "@sindresorhus/slugify": ["@sindresorhus/slugify@4.0.1", "", { "dependencies": { "@sindresorhus/transliterate": "^3.0.0", "escape-string-regexp": "^5.0.0" } }, "sha512-DsuqdYRMBj9zcLBQ6m0KrkrWi8PuxXcPlO7CEjrhCOZWt8JPEMCuD3LD3FOgET/sHqgOE++xvkZI0HONqFyaug=="],
+
+    "@sindresorhus/transliterate": ["@sindresorhus/transliterate@3.1.0", "", {}, "sha512-xSMZIoi9tqXNXNdcJWdvVSiNmFiHnE8PjlV9Yb0I33zX2UrbNooiVpOdAvEjdrYYLLUEnvvqCnm+wTyU12wDng=="],
+
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 
     "@types/mustache": ["@types/mustache@4.2.6", "", {}, "sha512-t+8/QWTAhOFlrF1IVZqKnMRJi84EgkIK5Kh0p2JV4OLywUvCwJPFxbJAl7XAow7DVIHsF+xW9f1MVzg0L6Szjw=="],
@@ -63,6 +68,8 @@
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
     "bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
+
+    "escape-string-regexp": ["escape-string-regexp@5.0.0", "", {}, "sha512-/veY75JbMK4j1yjvuUxuVsiS/hr/4iHs9FTT6cgTexxdE0Ly/glccBAkloH/DofkjRbZU3bnoj38mOmhkZ0lHw=="],
 
     "mustache": ["mustache@4.2.0", "", { "bin": { "mustache": "bin/mustache" } }, "sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ=="],
 

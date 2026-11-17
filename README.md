@@ -106,7 +106,7 @@ The following settings in `.changes/config.yaml` are templates:
 
 | Setting | Default | Values |
 |---------|---------|--------|
-| `fragmentName` | `{{kind}}-{{title}}` | `title` (the first body line without its list marker), `kind`, and any front matter key. Every value becomes a lower-case slug, and `titleMaxLength` limits the title. |
+| `fragmentName` | `{{kind}}-{{title}}` | `title` (the first body line without its list marker), `kind`, and any front matter key. Every value becomes a lower-case slug, transliterated to ASCII where possible, such as `groesse-aendern` for "Größe ändern", and `titleMaxLength` limits the title. |
 | `versionFormat` | ``## [`{{version}}`] ({{date}})`` | `version`, `date`, `tag`, `previousVersion`, and `previousTag` |
 | `kindFormat` | `### {{kind}}` | `kind` |
 | `changeFormat` | `{{body}}` | `body`, `kind`, and any front matter key, such as `{{body}}{{#pr}} (#{{pr}}){{/pr}}` |

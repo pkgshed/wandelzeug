@@ -15,6 +15,7 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
+    "@sindresorhus/slugify": "4.0.1",
     "mustache": "4.2.0"
   }
 }

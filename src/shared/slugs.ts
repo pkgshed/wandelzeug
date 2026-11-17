@@ -1,17 +1,30 @@
 /**
- * Slugs and titles for fragment file names.
+ * Slugs and titles for fragment file names. This is the only module that
+ * imports @sindresorhus/slugify.
  */
+
+import transliteratingSlugify from "@sindresorhus/slugify";
 
 export const LIST_MARKER = /^\s*(?:[*+-]|\d+[.)])\s+/;
 
-/** Turns text into a lower-case slug of letters and digits joined by hyphens. */
-export const slugify = (text: string): string =>
+/** Keeps the letters and digits of any script, joined by hyphens. */
+const unicodeSlug = (text: string): string =>
   text
-    .normalize("NFKD")
-    .replace(/\p{Mn}+/gu, "")
+    .normalize("NFKC")
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-+|-+$/g, "");
+
+/**
+ * Turns text into a lower-case slug joined by hyphens. It transliterates to
+ * ASCII where it can, such as "groesse" for "Größe", and keeps a word such
+ * as "TypeScript" whole. Text without any Latin form, such as Japanese,
+ * keeps its own letters instead of vanishing from the file name.
+ */
+export function slugify(text: string): string {
+  const ascii = transliteratingSlugify(text, { decamelize: false });
+  return ascii !== "" ? ascii : unicodeSlug(text);
+}
 
 /** Shortens a slug to at most maxLength characters, cutting at a hyphen where possible. */
 export function truncateSlug(slug: string, maxLength: number): string {
