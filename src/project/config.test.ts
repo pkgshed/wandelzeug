@@ -12,6 +12,24 @@ describe("configuration", () => {
     expect(parseConfig(Bun.YAML.parse(initConfig("")))).toEqual(DEFAULT_CONFIG);
   });
 
+  test("empty YAML values take the defaults", () => {
+    const config = parseConfig({ repositoryUrl: null, extraFields: null });
+    expect(config.repositoryUrl).toBe(DEFAULT_CONFIG.repositoryUrl);
+    expect(config.extraFields).toEqual([]);
+  });
+
+  test("every problem is reported, one per line", () => {
+    expect(() =>
+      parseConfig({ titleMaxLength: 0, kinds: [7], colour: "red" }),
+    ).toThrow(
+      [
+        "titleMaxLength: must be a positive integer",
+        "kinds[0]: must be a label or a mapping",
+        'unknown setting "colour"',
+      ].join("\n"),
+    );
+  });
+
   test("kinds may be bare labels", () => {
     const config = parseConfig({
       kinds: ["Added", { label: "Fixed", bump: "patch" }],
@@ -25,12 +43,12 @@ describe("configuration", () => {
   const invalid: [Record<string, unknown>, RegExp][] = [
     [{ changesdir: ".changes" }, /unknown setting "changesdir"/],
     [{ changesDir: ".changes" }, /unknown setting "changesDir"/],
-    [{ titleMaxLength: 0 }, /titleMaxLength must be a positive integer/],
-    [{ kinds: [] }, /kinds must be a non-empty list/],
+    [{ titleMaxLength: 0 }, /titleMaxLength: must be a positive integer/],
+    [{ kinds: [] }, /kinds: must be a non-empty list/],
     [{ kinds: ["Added", "added"] }, /duplicate label "added"/],
     [
       { kinds: [{ label: "Added", bump: "huge" }] },
-      /kinds\[0\]\.bump must be one of/,
+      /kinds\[0\]\.bump: must be one of: major, minor, patch/,
     ],
     [
       { kinds: [{ label: "Added", colour: "red" }] },
@@ -60,29 +78,29 @@ describe("configuration", () => {
       { releaseTemplate: "{{#kinds}}" },
       /releaseTemplate: template "\{\{#kinds\}\}": Unclosed section "kinds"/,
     ],
-    [{ releaseTemplate: 7 }, /releaseTemplate must be a string/],
+    [{ releaseTemplate: 7 }, /releaseTemplate: must be a string/],
     [{ fields: [] }, /unknown setting "fields"/],
     [{ headerPath: "header.md" }, /unknown setting "headerPath"/],
-    [{ extraFields: { key: "pr" } }, /extraFields must be a list/],
+    [{ extraFields: { key: "pr" } }, /extraFields: must be a list/],
     [
       { extraFields: [{ key: "title" }] },
-      /extraFields\[0\]\.key "title" is reserved/,
+      /extraFields\[0\]\.key: "title" is reserved/,
     ],
     [
       { extraFields: [{ key: "pr-id" }] },
-      /extraFields\[0\]\.key must be letters, digits and underscores/,
+      /extraFields\[0\]\.key: must be letters, digits and underscores, not starting with a digit/,
     ],
     [
       { extraFields: [{ key: "pr", type: "integer" }] },
-      /extraFields\[0\]\.type must be one of: string, block, int, enum, enums/,
+      /extraFields\[0\]\.type: must be one of: string, block, int, enum, enums/,
     ],
     [
       { extraFields: [{ key: "pr", required: "yes" }] },
-      /extraFields\[0\]\.required must be true or false/,
+      /extraFields\[0\]\.required: must be true or false/,
     ],
     [
       { extraFields: [{ key: "pr", prompt: "Pull\nrequest" }] },
-      /extraFields\[0\]\.prompt must be a single line/,
+      /extraFields\[0\]\.prompt: must be a single line of text/,
     ],
     [
       { extraFields: [{ key: "pr", colour: "red" }] },
@@ -98,7 +116,7 @@ describe("configuration", () => {
     ],
     [
       { extraFields: [{ key: "pr", type: "int", minInt: 1.5 }] },
-      /extraFields\[0\]\.minInt must be a whole number/,
+      /extraFields\[0\]\.minInt: must be a whole number/,
     ],
     [
       { extraFields: [{ key: "pr", type: "int", minInt: 5, maxInt: 2 }] },
@@ -106,11 +124,11 @@ describe("configuration", () => {
     ],
     [
       { extraFields: [{ key: "name", minLength: -1 }] },
-      /extraFields\[0\]\.minLength must be at least 0/,
+      /extraFields\[0\]\.minLength: must be at least 0/,
     ],
     [
       { extraFields: [{ key: "area", type: "enum" }] },
-      /extraFields\[0\]\.enumOptions must be a non-empty list/,
+      /extraFields\[0\]\.enumOptions: is required/,
     ],
     [
       {

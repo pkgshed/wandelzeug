@@ -1,16 +1,14 @@
 /**
  * The .changes/config.yaml configuration: its settings, kinds and extra
- * fields.
+ * fields. A valibot schema validates the settings, fills in the defaults,
+ * and defines the types. This is the only module that imports valibot.
  */
 
 import { join } from "node:path";
-import {
-  findDuplicate,
-  isRecord,
-  type RawRecord,
-} from "../shared/foundations.ts";
+import * as v from "valibot";
+import { findDuplicate } from "../shared/foundations.ts";
 import { isFieldName } from "../shared/templates.ts";
-import { type Bump, BUMPS, isBump } from "../shared/versions.ts";
+import { BUMPS } from "../shared/versions.ts";
 
 /**
  * The directory that holds the configuration, the unreleased changes and
@@ -22,96 +20,11 @@ export const CHANGES_DIR = ".changes";
 /** The configuration file, relative to the project root. It marks a project root. */
 export const CONFIG_FILE = join(CHANGES_DIR, "config.yaml");
 
-/** A kind of change, such as Added. Its bump drives "auto" versions. */
-export type Kind = {
-  readonly label: string;
-  readonly bump: Bump | undefined;
-};
-
-/** The value types of an extra field, named as in changie's custom choices. */
-export const FIELD_TYPES = ["string", "block", "int", "enum", "enums"] as const;
-export type FieldType = (typeof FIELD_TYPES)[number];
-
-const isFieldType = (value: unknown): value is FieldType =>
-  (FIELD_TYPES as readonly unknown[]).includes(value);
-
-type LengthLimits = {
-  readonly minLength: number | undefined;
-  readonly maxLength: number | undefined;
-};
-
-type IntLimits = {
-  readonly minInt: number | undefined;
-  readonly maxInt: number | undefined;
-};
-
-type EnumOptions = {
-  readonly enumOptions: readonly string[];
-};
-
-/** The type of an extra field together with the settings only it accepts. */
-type ExtraFieldTypeSettings =
-  | ({ readonly type: "string" } & LengthLimits)
-  | ({ readonly type: "block" } & LengthLimits)
-  | ({ readonly type: "int" } & IntLimits)
-  | ({ readonly type: "enum" } & EnumOptions)
-  | ({ readonly type: "enums" } & EnumOptions);
-
-/**
- * A front matter entry besides kind that "new" asks for and "check"
- * validates, such as a pull request number. Its value sits at the top level
- * of the front matter, next to kind.
- */
-export type ExtraField = {
-  readonly key: string;
-  /** The question that "new" asks for the value. */
-  readonly prompt: string;
-  readonly required: boolean;
-} & ExtraFieldTypeSettings;
-
-/** The extra fields of the given types. */
-export type ExtraFieldOf<T extends FieldType> = Extract<
-  ExtraField,
-  { type: T }
->;
-
 /** Keys that templates fill from the change itself, so metadata may not use them. */
 export const RESERVED_KEYS = ["kind", "title", "body"];
 
-/**
- * Project settings from .changes/config.yaml. Paths are relative to the
- * project root, the directory that holds .changes.
- */
-export type Config = {
-  /** Directory below .changes for unreleased fragments. */
-  readonly unreleasedDir: string;
-  /** Changelog that "wlz batch" adds releases to. */
-  readonly changelogPath: string;
-  /** Prefix of release names and the {{version}} value. Empty by default, as in "1.1.2". */
-  readonly versionPrefix: string;
-  /** Prefix of git tags and the {{tag}} value, such as "v" in "v1.1.2". */
-  readonly tagPrefix: string;
-  /** Web address of the repository for compare links. Empty turns the default links off. */
-  readonly repositoryUrl: string;
-  /** Mustache template for the fragment file name between "nnn-" and ".md". */
-  readonly fragmentName: string;
-  /** Maximum length of the {{title}} slug in fragment file names. */
-  readonly titleMaxLength: number;
-  /** Mustache template for the heading of a release. */
-  readonly versionFormat: string;
-  /** Mustache template for the heading of a kind section. */
-  readonly kindFormat: string;
-  /** Mustache template for one change entry. */
-  readonly changeFormat: string;
-  /** Mustache template for a whole release, which places the formats as partials. */
-  readonly releaseTemplate: string;
-  /** Mustache template for the link definition of a release. Empty turns links off. */
-  readonly linkFormat: string;
-  /** Kinds in changelog order. */
-  readonly kinds: readonly Kind[];
-  /** Front matter entries that "new" asks for and "check" validates. */
-  readonly extraFields: readonly ExtraField[];
-};
+/** The value types of an extra field, named as in changie's custom choices. */
+export const FIELD_TYPES = ["string", "block", "int", "enum", "enums"] as const;
 
 /**
  * The release layout that places the three formats: the version heading,
@@ -135,351 +48,397 @@ export const DEFAULT_RELEASE_TEMPLATE = `{{> version}}
 export const DEFAULT_LINK_FORMAT =
   "[`{{version}}`]: {{repositoryUrl}}/{{#previousTag}}compare/{{previousTag}}...{{tag}}{{/previousTag}}{{^previousTag}}releases/tag/{{tag}}{{/previousTag}}";
 
-/** The settings that apply when .changes/config.yaml leaves them out. */
-export const DEFAULT_CONFIG: Config = {
-  unreleasedDir: "unreleased",
-  changelogPath: "CHANGELOG.md",
-  versionPrefix: "",
-  tagPrefix: "v",
-  repositoryUrl: "",
-  fragmentName: "{{kind}}-{{title}}",
-  titleMaxLength: 48,
-  versionFormat: "## [`{{version}}`] ({{date}})",
-  kindFormat: "### {{kind}}",
-  changeFormat: "{{body}}",
-  releaseTemplate: DEFAULT_RELEASE_TEMPLATE,
-  linkFormat: DEFAULT_LINK_FORMAT,
-  kinds: [
-    {
-      label: "Added",
-      bump: "minor",
-    },
-    {
-      label: "Changed",
-      bump: "major",
-    },
-    {
-      label: "Deprecated",
-      bump: "minor",
-    },
-    {
-      label: "Removed",
-      bump: "major",
-    },
-    {
-      label: "Fixed",
-      bump: "patch",
-    },
-    {
-      label: "Security",
-      bump: "patch",
-    },
-  ],
-  extraFields: [],
-};
+/** The kinds of Keep a Changelog, in its order. */
+const DEFAULT_KINDS = [
+  {
+    label: "Added",
+    bump: "minor",
+  },
+  {
+    label: "Changed",
+    bump: "major",
+  },
+  {
+    label: "Deprecated",
+    bump: "minor",
+  },
+  {
+    label: "Removed",
+    bump: "major",
+  },
+  {
+    label: "Fixed",
+    bump: "patch",
+  },
+  {
+    label: "Security",
+    bump: "patch",
+  },
+] as const;
 
-const CONFIG_KEYS = Object.keys(DEFAULT_CONFIG);
+// --- Schema building blocks -------------------------------------------------
 
-type KeysWithValue<T, V> = Exclude<
-  { [K in keyof T]: T[K] extends V ? K : never }[keyof T],
-  undefined
->;
-type StringSetting = KeysWithValue<Config, string>;
+/** A setting that takes its default when YAML leaves it out or empty, as in "key:". */
+const setting = <
+  const Schema extends v.GenericSchema,
+  const Default extends v.InferInput<Schema>,
+>(
+  schema: Schema,
+  fallback: Default,
+) => v.nullish(schema, fallback);
 
-const findUnknownKey = (
-  record: RawRecord,
-  known: readonly string[],
-): string | undefined =>
-  Object.keys(record).find((key) => !known.includes(key));
-
-function readString(settings: RawRecord, key: StringSetting): string {
-  const value = settings[key] ?? DEFAULT_CONFIG[key];
-  if (typeof value !== "string") {
-    throw new Error(`${key} must be a string`);
-  }
-  return value;
-}
-
-function readTitleMaxLength(settings: RawRecord): number {
-  const value = settings.titleMaxLength ?? DEFAULT_CONFIG.titleMaxLength;
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
-    throw new Error("titleMaxLength must be a positive integer");
-  }
-  return value;
-}
-
-function parseLabel(value: unknown, where: string): string {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`${where} needs a non-empty label`);
-  }
-  return value;
-}
-
-function parseBump(value: unknown, where: string): Bump | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (!isBump(value)) {
-    throw new Error(`${where}.bump must be one of: ${BUMPS.join(", ")}`);
-  }
-  return value;
-}
-
-/** Parses one kinds entry, which is either a bare label or a mapping. */
-function parseKind(entry: unknown, index: number): Kind {
-  const where = `kinds[${index}]`;
-  if (!isRecord(entry)) {
-    return {
-      label: parseLabel(entry, where),
-      bump: undefined,
-    };
-  }
-
-  const unknownKey = findUnknownKey(entry, ["label", "bump"]);
-  if (unknownKey !== undefined) {
-    throw new Error(`${where}: unknown setting ${JSON.stringify(unknownKey)}`);
-  }
-  return {
-    label: parseLabel(entry.label, where),
-    bump: parseBump(entry.bump, where),
-  };
-}
-
-function readKinds(settings: RawRecord): readonly Kind[] {
-  if (settings.kinds === undefined) return DEFAULT_CONFIG.kinds;
-  if (!Array.isArray(settings.kinds) || settings.kinds.length === 0) {
-    throw new Error("kinds must be a non-empty list");
-  }
-
-  const kinds = settings.kinds.map(parseKind);
-  const duplicate = findDuplicate(
-    kinds.map((kind) => kind.label.toLowerCase()),
+/** An optional value that YAML may leave empty. Both absent and empty mean undefined. */
+const absent = <const Schema extends v.GenericSchema>(schema: Schema) =>
+  v.pipe(
+    v.nullish(schema),
+    v.transform((value) => value ?? undefined),
   );
-  if (duplicate !== undefined) {
-    throw new Error(`kinds: duplicate label ${JSON.stringify(duplicate)}`);
-  }
-  return kinds;
-}
 
-function parseFieldKey(value: unknown, where: string): string {
-  if (typeof value !== "string" || !isFieldName(value)) {
-    throw new Error(
-      `${where}.key must be letters, digits and underscores, not starting with a digit`,
-    );
+/** Words a problem with a mapping: an unknown key, a missing key, or no mapping at all. */
+function describeMappingIssue(
+  issue: v.StrictObjectIssue,
+  context: string,
+  notMapping: string,
+): string {
+  if (issue.expected === "never") {
+    return `unknown setting ${JSON.stringify(issue.input)}${context}`;
   }
-  if (RESERVED_KEYS.includes(value)) {
-    throw new Error(`${where}.key ${JSON.stringify(value)} is reserved`);
-  }
-  return value;
-}
-
-/** Parses a prompt. Without one, "new" asks with the key itself. */
-function parseFieldPrompt(value: unknown, key: string, where: string): string {
-  if (value === undefined || value === null) return key;
-  if (
-    typeof value !== "string" ||
-    value.trim() === "" ||
-    /[\r\n]/.test(value)
-  ) {
-    throw new Error(`${where}.prompt must be a single line of text`);
-  }
-  return value;
-}
-
-/** Parses a type. Without one, a field holds a string. */
-function parseFieldType(value: unknown, where: string): FieldType {
-  if (value === undefined || value === null) return "string";
-  if (!isFieldType(value)) {
-    throw new Error(`${where}.type must be one of: ${FIELD_TYPES.join(", ")}`);
-  }
-  return value;
-}
-
-function parseFieldRequired(value: unknown, where: string): boolean {
-  if (value === undefined || value === null) return false;
-  if (typeof value !== "boolean") {
-    throw new Error(`${where}.required must be true or false`);
-  }
-  return value;
-}
-
-/** Parses an optional limit, which must be a whole number of at least lowest. */
-function parseLimit(
-  value: unknown,
-  name: string,
-  lowest: number,
-): number | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
-    throw new Error(`${name} must be a whole number`);
-  }
-  if (value < lowest) {
-    throw new Error(`${name} must be at least ${lowest}`);
-  }
-  return value;
-}
-
-function rejectInvertedLimits(
-  where: string,
-  [minName, min]: readonly [string, number | undefined],
-  [maxName, max]: readonly [string, number | undefined],
-): void {
-  if (min === undefined || max === undefined || min <= max) return;
-  throw new Error(`${where}: ${minName} ${min} exceeds ${maxName} ${max}`);
-}
-
-function parseLengthLimits(entry: RawRecord, where: string): LengthLimits {
-  const minLength = parseLimit(entry.minLength, `${where}.minLength`, 0);
-  const maxLength = parseLimit(entry.maxLength, `${where}.maxLength`, 0);
-  rejectInvertedLimits(
-    where,
-    ["minLength", minLength],
-    ["maxLength", maxLength],
-  );
-  return { minLength, maxLength };
-}
-
-function parseIntLimits(entry: RawRecord, where: string): IntLimits {
-  const lowest = Number.MIN_SAFE_INTEGER;
-  const minInt = parseLimit(entry.minInt, `${where}.minInt`, lowest);
-  const maxInt = parseLimit(entry.maxInt, `${where}.maxInt`, lowest);
-  rejectInvertedLimits(where, ["minInt", minInt], ["maxInt", maxInt]);
-  return { minInt, maxInt };
+  const isMissingKey =
+    (issue.path?.length ?? 0) > 0 && issue.input === undefined;
+  return isMissingKey ? "is required" : notMapping;
 }
 
 /**
- * Parses the options of an enum or enums field. Options match without regard
- * to case, so they must differ by more than case. An enums value joins its
- * choices with commas, so its options may not contain one.
+ * A mapping that rejects keys it does not know, so a typo fails instead of
+ * being ignored. The context names the settings, as in "for type string".
  */
-function parseEnumOptions(
-  type: "enum" | "enums",
-  value: unknown,
-  where: string,
-): readonly string[] {
-  const name = `${where}.enumOptions`;
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error(`${name} must be a non-empty list`);
-  }
-
-  const options = value.map((option: unknown) => {
-    const isScalar = ["string", "number", "boolean"].includes(typeof option);
-    if (!isScalar || String(option).trim() === "") {
-      throw new Error(`${name} must hold non-empty text`);
-    }
-    return String(option).trim();
-  });
-  const duplicate = findDuplicate(
-    options.map((option) => option.toLowerCase()),
+const mapping = <const Entries extends v.ObjectEntries>(
+  entries: Entries,
+  context = "",
+  notMapping = "must be a mapping",
+) =>
+  v.strictObject(entries, (issue) =>
+    describeMappingIssue(issue, context, notMapping),
   );
-  if (duplicate !== undefined) {
-    throw new Error(`${name}: duplicate option ${JSON.stringify(duplicate)}`);
-  }
-  if (type === "enums" && options.some((option) => option.includes(","))) {
-    throw new Error(
-      `${name}: options of an enums field may not contain commas`,
-    );
-  }
-  return options;
-}
 
-function parseTypeSettings(
-  type: FieldType,
-  entry: RawRecord,
-  where: string,
-): ExtraFieldTypeSettings {
-  switch (type) {
-    case "string":
-    case "block":
-      return { type, ...parseLengthLimits(entry, where) };
-    case "int":
-      return { type, ...parseIntLimits(entry, where) };
-    case "enum":
-    case "enums":
-      return {
-        type,
-        enumOptions: parseEnumOptions(type, entry.enumOptions, where),
-      };
-  }
-}
+const text = v.string("must be a string");
 
-const COMMON_FIELD_SETTINGS = ["key", "prompt", "type", "required"];
+const nonEmptyText = v.pipe(
+  v.string("must be a non-empty string"),
+  v.trim(),
+  v.nonEmpty("must be a non-empty string"),
+);
 
-const TYPE_SETTINGS: Readonly<Record<FieldType, readonly string[]>> = {
-  string: ["minLength", "maxLength"],
-  block: ["minLength", "maxLength"],
-  int: ["minInt", "maxInt"],
-  enum: ["enumOptions"],
-  enums: ["enumOptions"],
+const wholeNumber = v.pipe(
+  v.number("must be a whole number"),
+  v.safeInteger("must be a whole number"),
+);
+
+const lengthLimit = absent(
+  v.pipe(wholeNumber, v.minValue(0, "must be at least 0")),
+);
+
+// --- Kinds ------------------------------------------------------------------
+
+const bump = v.picklist(BUMPS, `must be one of: ${BUMPS.join(", ")}`);
+
+/** A kind of change, such as Added. A bare label in the list stands for a kind without a bump. */
+const KindSchema = v.pipe(
+  v.unknown(),
+  v.transform((entry) =>
+    typeof entry === "string" ? { label: entry } : entry,
+  ),
+  mapping(
+    {
+      label: nonEmptyText,
+      bump: absent(bump),
+    },
+    "",
+    "must be a label or a mapping",
+  ),
+);
+
+const labelDuplicate = (kinds: readonly { label: string }[]) =>
+  findDuplicate(kinds.map((kind) => kind.label.toLowerCase()));
+
+const KindsSchema = v.pipe(
+  v.array(KindSchema, "must be a list"),
+  v.minLength(1, "must be a non-empty list"),
+  v.check(
+    (kinds) => labelDuplicate(kinds) === undefined,
+    (issue) =>
+      `duplicate label ${JSON.stringify(labelDuplicate(issue.input as readonly { label: string }[]))}`,
+  ),
+);
+
+// --- Extra fields -------------------------------------------------------------
+
+const fieldKey = v.pipe(
+  v.string("must be letters, digits and underscores"),
+  v.check(
+    isFieldName,
+    "must be letters, digits and underscores, not starting with a digit",
+  ),
+  v.check(
+    (key) => !RESERVED_KEYS.includes(key),
+    (issue) => `${JSON.stringify(issue.input)} is reserved`,
+  ),
+);
+
+const fieldPrompt = absent(
+  v.pipe(
+    nonEmptyText,
+    v.check(
+      (prompt) => !/[\r\n]/.test(prompt),
+      "must be a single line of text",
+    ),
+  ),
+);
+
+/** The settings that every extra field accepts, whatever its type. */
+const commonFieldEntries = {
+  key: fieldKey,
+  prompt: fieldPrompt,
+  required: setting(v.boolean("must be true or false"), false),
 };
 
-function parseExtraField(entry: unknown, index: number): ExtraField {
-  const where = `extraFields[${index}]`;
-  if (!isRecord(entry)) {
-    throw new Error(`${where} must be a mapping`);
-  }
+const textField = <const Type extends "string" | "block">(
+  type: v.GenericSchema<Type | undefined, Type>,
+  name: Type,
+) =>
+  mapping(
+    {
+      ...commonFieldEntries,
+      type,
+      minLength: lengthLimit,
+      maxLength: lengthLimit,
+    },
+    ` for type ${name}`,
+  );
 
-  const type = parseFieldType(entry.type, where);
-  const known = [...COMMON_FIELD_SETTINGS, ...TYPE_SETTINGS[type]];
-  const unknownKey = findUnknownKey(entry, known);
-  if (unknownKey !== undefined) {
-    throw new Error(
-      `${where}: unknown setting ${JSON.stringify(unknownKey)} for type ${type}`,
-    );
-  }
+const intField = mapping(
+  {
+    ...commonFieldEntries,
+    type: v.literal("int"),
+    minInt: absent(wholeNumber),
+    maxInt: absent(wholeNumber),
+  },
+  " for type int",
+);
 
-  const key = parseFieldKey(entry.key, where);
-  return {
-    key,
-    prompt: parseFieldPrompt(entry.prompt, key, where),
-    required: parseFieldRequired(entry.required, where),
-    ...parseTypeSettings(type, entry, where),
-  };
+const optionDuplicate = (options: readonly string[]) =>
+  findDuplicate(options.map((option) => option.toLowerCase()));
+
+/**
+ * The options of an enum or enums field. Options match without regard to
+ * case, so they must differ by more than case. An enums value joins its
+ * choices with commas, so its options may not contain one.
+ */
+const enumOptions = (type: "enum" | "enums") =>
+  v.pipe(
+    v.array(
+      v.pipe(
+        v.union(
+          [v.string(), v.number(), v.boolean()],
+          "must hold non-empty text",
+        ),
+        v.transform((option) => String(option).trim()),
+        v.nonEmpty("must hold non-empty text"),
+      ),
+      "must be a non-empty list",
+    ),
+    v.minLength(1, "must be a non-empty list"),
+    v.check(
+      (options) => optionDuplicate(options) === undefined,
+      (issue) =>
+        `duplicate option ${JSON.stringify(optionDuplicate(issue.input as readonly string[]))}`,
+    ),
+    v.check(
+      (options) =>
+        type === "enum" || options.every((option) => !option.includes(",")),
+      "options of an enums field may not contain commas",
+    ),
+  );
+
+const enumField = <const Type extends "enum" | "enums">(type: Type) =>
+  mapping(
+    {
+      ...commonFieldEntries,
+      type: v.literal(type),
+      enumOptions: enumOptions(type),
+    },
+    ` for type ${type}`,
+  );
+
+/** The extra field settings by type. Without a type, a field holds a string. */
+const FieldSettingsSchema = v.variant(
+  "type",
+  [
+    textField(v.optional(v.literal("string"), "string"), "string"),
+    textField(v.literal("block"), "block"),
+    intField,
+    enumField("enum"),
+    enumField("enums"),
+  ],
+  `must be one of: ${FIELD_TYPES.join(", ")}`,
+);
+
+type FieldSettings = v.InferOutput<typeof FieldSettingsSchema>;
+
+function describeInverted(
+  [minName, min]: readonly [string, number | undefined],
+  [maxName, max]: readonly [string, number | undefined],
+): string | undefined {
+  const isInverted = min !== undefined && max !== undefined && min > max;
+  return isInverted ? `${minName} ${min} exceeds ${maxName} ${max}` : undefined;
 }
 
-/** Reads the extra fields. An empty "extraFields:" entry means none. */
-function readExtraFields(settings: RawRecord): readonly ExtraField[] {
-  const value = settings.extraFields ?? undefined;
-  if (value === undefined) return DEFAULT_CONFIG.extraFields;
-  if (!Array.isArray(value)) {
-    throw new Error("extraFields must be a list");
+/** Describes a lower limit above the upper limit of a field, if there is one. */
+function invertedLimit(field: FieldSettings): string | undefined {
+  switch (field.type) {
+    case "string":
+    case "block":
+      return describeInverted(
+        ["minLength", field.minLength],
+        ["maxLength", field.maxLength],
+      );
+    case "int":
+      return describeInverted(
+        ["minInt", field.minInt],
+        ["maxInt", field.maxInt],
+      );
+    case "enum":
+    case "enums":
+      return undefined;
   }
-
-  const fields = value.map(parseExtraField);
-  const duplicate = findDuplicate(fields.map((field) => field.key));
-  if (duplicate !== undefined) {
-    throw new Error(`extraFields: duplicate key ${JSON.stringify(duplicate)}`);
-  }
-  return fields;
 }
 
-/** Parses the YAML value of a configuration file. Absent settings take their defaults. */
+/**
+ * A front matter entry besides kind that "new" asks for and "check"
+ * validates, such as a pull request number. Its value sits at the top level
+ * of the front matter, next to kind. Without a prompt, "new" asks with the
+ * key itself.
+ */
+const ExtraFieldSchema = v.pipe(
+  FieldSettingsSchema,
+  v.check(
+    (field) => invertedLimit(field) === undefined,
+    (issue) => invertedLimit(issue.input as FieldSettings) ?? "",
+  ),
+  v.transform((field) => ({ ...field, prompt: field.prompt ?? field.key })),
+);
+
+const keyDuplicate = (fields: readonly { key: string }[]) =>
+  findDuplicate(fields.map((field) => field.key));
+
+const ExtraFieldsSchema = v.pipe(
+  v.array(ExtraFieldSchema, "must be a list"),
+  v.check(
+    (fields) => keyDuplicate(fields) === undefined,
+    (issue) =>
+      `duplicate key ${JSON.stringify(keyDuplicate(issue.input as readonly { key: string }[]))}`,
+  ),
+);
+
+// --- The configuration ------------------------------------------------------
+
+/**
+ * Project settings from .changes/config.yaml. Paths are relative to the
+ * project root, the directory that holds .changes. Absent and empty
+ * settings take their defaults.
+ */
+const ConfigSchema = v.pipe(
+  v.nullish(v.unknown(), {}),
+  mapping({
+    /** Directory below .changes for unreleased fragments. */
+    unreleasedDir: setting(text, "unreleased"),
+    /** Changelog that "wlz batch" adds releases to. */
+    changelogPath: setting(text, "CHANGELOG.md"),
+    /** Prefix of release names and the {{version}} value, as in "1.1.2". */
+    versionPrefix: setting(text, ""),
+    /** Prefix of git tags and the {{tag}} value, as in "v1.1.2". */
+    tagPrefix: setting(text, "v"),
+    /** Web address of the repository for compare links. Empty turns the default links off. */
+    repositoryUrl: setting(text, ""),
+    /** Mustache template for the fragment file name between "nnn-" and ".md". */
+    fragmentName: setting(text, "{{kind}}-{{title}}"),
+    /** Maximum length of the {{title}} slug in fragment file names. */
+    titleMaxLength: setting(
+      v.pipe(
+        v.number("must be a positive integer"),
+        v.integer("must be a positive integer"),
+        v.minValue(1, "must be a positive integer"),
+      ),
+      48,
+    ),
+    /** Mustache template for the heading of a release. */
+    versionFormat: setting(text, "## [`{{version}}`] ({{date}})"),
+    /** Mustache template for the heading of a kind section. */
+    kindFormat: setting(text, "### {{kind}}"),
+    /** Mustache template for one change entry. */
+    changeFormat: setting(text, "{{body}}"),
+    /** Mustache template for a whole release, which places the formats as partials. */
+    releaseTemplate: setting(text, DEFAULT_RELEASE_TEMPLATE),
+    /** Mustache template for the link definition of a release. Empty turns links off. */
+    linkFormat: setting(text, DEFAULT_LINK_FORMAT),
+    /** Kinds in changelog order. */
+    kinds: v.optional(KindsSchema, DEFAULT_KINDS),
+    /** Front matter entries that "new" asks for and "check" validates. */
+    extraFields: setting(ExtraFieldsSchema, []),
+  }),
+);
+
+/** Project settings, with every default filled in. */
+export type Config = v.InferOutput<typeof ConfigSchema>;
+
+/** A kind of change, such as Added. Its bump drives "auto" versions. */
+export type Kind = v.InferOutput<typeof KindSchema>;
+
+/** A front matter entry that "new" asks for and "check" validates. */
+export type ExtraField = v.InferOutput<typeof ExtraFieldSchema>;
+
+export type FieldType = ExtraField["type"];
+
+/** The extra fields of the given types. */
+export type ExtraFieldOf<T extends FieldType> = Extract<
+  ExtraField,
+  { type: T }
+>;
+
+/** Writes the path of an issue the way the configuration spells it, as in "kinds[0].label". */
+function issuePath(issue: v.BaseIssue<unknown>): string {
+  const items = issue.path ?? [];
+  // An unknown key is the last path item, and its message names it already.
+  const isUnknownKey =
+    issue.type === "strict_object" && issue.expected === "never";
+  const shown = isUnknownKey ? items.slice(0, -1) : items;
+  return shown.reduce((path, item) => {
+    const key: unknown = item.key;
+    if (typeof key === "number") return `${path}[${key}]`;
+    return path === "" ? String(key) : `${path}.${String(key)}`;
+  }, "");
+}
+
+const describeIssue = (issue: v.BaseIssue<unknown>): string => {
+  const path = issuePath(issue);
+  return path === "" ? issue.message : `${path}: ${issue.message}`;
+};
+
+/**
+ * Parses the YAML value of a configuration file. Absent settings take their
+ * defaults. A configuration with problems fails with every problem, one per
+ * line.
+ */
 export function parseConfig(raw: unknown): Config {
-  const settings = raw ?? {};
-  if (!isRecord(settings)) {
-    throw new Error("configuration must be a mapping");
+  const result = v.safeParse(ConfigSchema, raw, { abortEarly: false });
+  if (!result.success) {
+    throw new Error(result.issues.map(describeIssue).join("\n"));
   }
-
-  const unknownKey = findUnknownKey(settings, CONFIG_KEYS);
-  if (unknownKey !== undefined) {
-    throw new Error(`unknown setting ${JSON.stringify(unknownKey)}`);
-  }
-
-  return {
-    unreleasedDir: readString(settings, "unreleasedDir"),
-    changelogPath: readString(settings, "changelogPath"),
-    versionPrefix: readString(settings, "versionPrefix"),
-    tagPrefix: readString(settings, "tagPrefix"),
-    repositoryUrl: readString(settings, "repositoryUrl"),
-    fragmentName: readString(settings, "fragmentName"),
-    titleMaxLength: readTitleMaxLength(settings),
-    versionFormat: readString(settings, "versionFormat"),
-    kindFormat: readString(settings, "kindFormat"),
-    changeFormat: readString(settings, "changeFormat"),
-    releaseTemplate: readString(settings, "releaseTemplate"),
-    linkFormat: readString(settings, "linkFormat"),
-    kinds: readKinds(settings),
-    extraFields: readExtraFields(settings),
-  };
+  return result.output;
 }
+
+/** The settings that apply when .changes/config.yaml leaves them out. */
+export const DEFAULT_CONFIG: Config = parseConfig({});
 
 export const findKind = (
   kinds: readonly Kind[],
