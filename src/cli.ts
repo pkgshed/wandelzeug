@@ -141,6 +141,11 @@ function describeImport(plan: ImportPlan): string[] {
 
 /** Gives data blocks to the releases of a project that lack one, and reports what happened. */
 async function importReleases(project: Project): Promise<void> {
+  if (!project.config.releaseData) {
+    throw new Error(
+      "import: releaseData is off in .changes/config.yaml, turn it on to give releases data blocks",
+    );
+  }
   const document = await readChangelog(project);
   const plan = planImport(document, project.config.kinds);
   if (plan.content !== document.lines.join(document.newline)) {

@@ -114,6 +114,12 @@ linkFormat: ${yamlString(DEFAULT_CONFIG.linkFormat)}
 # --expect, --message-file and --dry-run.
 tagHelper: ${yamlString(DEFAULT_CONFIG.tagHelper)}
 
+# Whether "batch" and "release" write a data block at the bottom of each
+# release: an HTML comment with the date and the changes of the release.
+# "wlz render" needs it to render the release again after a template
+# changes, and "wlz import" writes it for existing releases.
+releaseData: ${DEFAULT_CONFIG.releaseData}
+
 # Files whose version numbers "batch" and "release" update with each
 # release, such as package.json. find is a JavaScript regular expression,
 # where ^ and $ match at line breaks. Every match gives way to the Mustache

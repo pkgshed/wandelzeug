@@ -648,6 +648,27 @@ describe("command line", () => {
       expect((await run("check")).stderr).toContain(problem);
     });
 
+    test("releaseData: false leaves the data block out until an import", async () => {
+      await run("init");
+      await editConfig("releaseData: true", "releaseData: false");
+      await run("new", "-k", "Added", "-b", "* Feature");
+      await run("batch", "minor", "--date", "2026-11-17");
+      expect(await changelog()).not.toContain("<!-- wlz:data");
+
+      const refused = await run("import");
+      expect(refused.exitCode).toBe(1);
+      expect(refused.stderr).toContain(
+        "import: releaseData is off in .changes/config.yaml, turn it on to give releases data blocks",
+      );
+
+      await editConfig("releaseData: false", "releaseData: true");
+      expect((await run("import")).stdout).toBe("imported 1 release: 0.1.0\n");
+      expect(await changelog()).toContain(
+        "* Feature\n<!-- wlz:data\ndate: 2026-11-17\n",
+      );
+      expect((await run("check")).exitCode).toBe(0);
+    });
+
     test("an empty repositoryUrl keeps the link definitions", async () => {
       await projectWithReleases();
       await setSetting("repositoryUrl", "");

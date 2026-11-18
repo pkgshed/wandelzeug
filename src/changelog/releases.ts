@@ -262,7 +262,7 @@ export type ReleasePlan = {
   readonly version: Version;
   /** The release as the template renders it, without markers, such as for a tag message. */
   readonly notes: string;
-  /** The release with its markers and data block, as batch inserts it. */
+  /** The release with its markers, and its data block when releaseData is on, as batch inserts it. */
   readonly section: string;
   /** The link definition that batch inserts below the links anchor, when links are on. */
   readonly link: string | undefined;
@@ -302,11 +302,10 @@ export async function planRelease(
 
   const values = releaseValues(project.config, version, date, releases);
   const notes = renderRelease(project, values, fragments);
-  const section = releaseSection(
-    values.version,
-    releaseData(date, fragments, notes),
-    notes,
-  );
+  const data = project.config.releaseData
+    ? releaseData(date, fragments, notes)
+    : undefined;
+  const section = releaseSection(values.version, data, notes);
   const link = renderLink(project, values);
   if (link !== undefined && document.links === undefined) {
     throw new Error(

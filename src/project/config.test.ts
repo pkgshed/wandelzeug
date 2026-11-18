@@ -146,6 +146,7 @@ describe("configuration", () => {
       { extraFields: [{ key: "pr" }, { key: "pr" }] },
       /extraFields: duplicate key "pr"/,
     ],
+    [{ releaseData: "yes" }, /releaseData: must be true or false/],
     [
       { replacements: { path: "package.json" } },
       /replacements: must be a list/,

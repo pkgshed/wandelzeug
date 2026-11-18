@@ -47,7 +47,7 @@ Older history from before wandelzeug.
 
 The anchor `<!-- wlz:releases -->` marks where releases go: `batch` inserts each new release directly below it, so the newest release comes first. Each release sits between `BEGIN` and `END` markers that name its version, which is how `latest`, `next`, and `show` find releases without parsing headings. The changelog changes only when you release, so branches don't conflict over it. The header above the anchor is yours, and `init` writes the one shown here into a new changelog.
 
-The `wlz:data` comment at the bottom of a release is its data block: the date, the changes as their change files had them, and a hash of the notes as wandelzeug rendered them. It lets `wlz render` render the release again. The `wlz:links` markers enclose the link definitions that wandelzeug manages. Definitions outside them belong to you.
+The `wlz:data` comment at the bottom of a release is its data block: the date, the changes as their change files had them, and a hash of the notes as wandelzeug rendered them. It lets `wlz render` render the release again. To leave it out of new releases, set `releaseData` to `false` in `.changes/config.yaml`. The `wlz:links` markers enclose the link definitions that wandelzeug manages. Definitions outside them belong to you.
 
 ## Render past releases again
 
@@ -144,7 +144,7 @@ To give data blocks to the releases of a changelog that you onboarded before, ru
 wlz import
 ```
 
-The import goes through the marked releases without a data block, newest first, and then through the releases from before wandelzeug, in the order of the file. A release fits when it has the shape that wandelzeug renders:
+The import needs `releaseData`, which is on by default. It goes through the marked releases without a data block, newest first, and then through the releases from before wandelzeug, in the order of the file. A release fits when it has the shape that wandelzeug renders:
 
 - Its heading names the version and a date as `YYYY-MM-DD`, such as `## [1.4.2] - 2025-03-02`.
 - Below the heading, each section heading names a configured kind, such as `### Added`.
