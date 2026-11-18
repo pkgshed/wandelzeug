@@ -100,9 +100,9 @@ describe("project workflow", () => {
     ].join("\n");
     expect(first.path).toBe(join(root, "CHANGELOG.md"));
     expect(first.section).toBe(firstSection);
-    expect(first.link).toBe(
+    expect(first.links).toEqual([
       "[`0.1.0`]: https://codeberg.org/o/r/releases/tag/v0.1.0",
-    );
+    ]);
     await writeRelease(first);
     await removeFragments(first.fragments);
     expect(await unreleasedFiles()).toEqual([".gitkeep"]);

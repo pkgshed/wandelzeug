@@ -158,6 +158,38 @@ describe("configuration", () => {
       { extraFields: [{ key: "pr", type: "int", pattern: "x" }] },
       /extraFields\[0\]: unknown setting "pattern" for type int/,
     ],
+    [
+      { extraFields: [{ key: "pr", type: "int", label: "#{{pr}}" }] },
+      /extraFields\[0\]: label needs url/,
+    ],
+    [
+      { extraFields: [{ key: "issue", url: "https://x/{{issue}}" }] },
+      /extraFields\[0\]: url needs a pattern, which finds the references in the notes/,
+    ],
+    [
+      { extraFields: [{ key: "notes", type: "block", url: "https://x" }] },
+      /extraFields\[0\]: unknown setting "url" for type block/,
+    ],
+    [
+      { extraFields: [{ key: "pr", type: "int", url: "https://x/{{id}}" }] },
+      /extraFields\[0\]\.url: unknown value \{\{id\}\}, expected one of: pr, repositoryUrl/,
+    ],
+    [
+      {
+        extraFields: [
+          { key: "pr", type: "int", url: "https://x/{{pr}}", label: "#{{id}}" },
+        ],
+      },
+      /extraFields\[0\]\.label: unknown value \{\{id\}\}, expected one of: pr/,
+    ],
+    [
+      {
+        extraFields: [
+          { key: "pr", type: "int", url: "https://x/{{pr}}", label: "PR" },
+        ],
+      },
+      /extraFields\[0\]\.label: must place \{\{pr\}\} exactly once between fixed text/,
+    ],
     [{ releaseData: "yes" }, /releaseData: must be true or false/],
     [
       { replacements: { path: "package.json" } },

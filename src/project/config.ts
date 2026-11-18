@@ -218,6 +218,16 @@ const patternText = v.pipe(
   ),
 );
 
+/**
+ * The settings that make the values of a field links: the Mustache
+ * templates for the web address of a value and for the label that
+ * references the value in the notes, such as "#{{pr}}" for "[#42]".
+ */
+const linkEntries = {
+  url: absent(nonEmptyText),
+  label: absent(nonEmptyText),
+};
+
 const stringField = mapping(
   {
     ...commonFieldEntries,
@@ -225,6 +235,7 @@ const stringField = mapping(
     minLength: lengthLimit,
     maxLength: lengthLimit,
     pattern: absent(patternText),
+    ...linkEntries,
   },
   " for type string",
 );
@@ -245,6 +256,7 @@ const intField = mapping(
     type: v.literal("int"),
     minInt: absent(wholeNumber),
     maxInt: absent(wholeNumber),
+    ...linkEntries,
   },
   " for type int",
 );
@@ -336,11 +348,33 @@ function invertedLimit(field: FieldSettings): string | undefined {
  * of the front matter, next to kind. Without a prompt, "new" asks with the
  * key itself.
  */
+/**
+ * Describes a link setting that cannot work, if there is one. A label is
+ * only for links, and wandelzeug finds the references of a string field in
+ * the notes through its pattern.
+ */
+function linkProblem(field: FieldSettings): string | undefined {
+  if (field.type !== "string" && field.type !== "int") return undefined;
+  if (field.label !== undefined && field.url === undefined) {
+    return "label needs url";
+  }
+  const lacksPattern =
+    field.type === "string" &&
+    field.url !== undefined &&
+    field.pattern === undefined;
+  return lacksPattern
+    ? "url needs a pattern, which finds the references in the notes"
+    : undefined;
+}
+
+const fieldProblem = (field: FieldSettings): string | undefined =>
+  invertedLimit(field) ?? linkProblem(field);
+
 const ExtraFieldSchema = v.pipe(
   FieldSettingsSchema,
   v.check(
-    (field) => invertedLimit(field) === undefined,
-    (issue) => invertedLimit(issue.input as FieldSettings) ?? "",
+    (field) => fieldProblem(field) === undefined,
+    (issue) => fieldProblem(issue.input as FieldSettings) ?? "",
   ),
   v.transform((field) => ({ ...field, prompt: field.prompt ?? field.key })),
 );

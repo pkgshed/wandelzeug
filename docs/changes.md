@@ -1,6 +1,6 @@
 # Change files
 
-This guide covers the format of change files, how `wlz new` records them, extra fields, and how `wlz check` validates them in CI.
+This guide covers the format of change files, how `wlz new` records them, extra fields, links to issues and pull requests, and how `wlz check` validates them in CI.
 
 ## The file format
 
@@ -32,9 +32,9 @@ The types and their settings follow changie's custom choices:
 
 | Type | Value | Settings |
 |------|-------|----------|
-| `string` | One line of text | `minLength`, `maxLength`, `pattern` |
+| `string` | One line of text | `minLength`, `maxLength`, `pattern`, `url`, `label` |
 | `block` | Several lines of text, written as a literal block | `minLength`, `maxLength` |
-| `int` | A whole number. `#42` and `!42` count as `42`, the way GitHub and GitLab write pull and merge request numbers. | `minInt`, `maxInt` |
+| `int` | A whole number. `#42` and `!42` count as `42`, the way GitHub and GitLab write pull and merge request numbers. | `minInt`, `maxInt`, `url`, `label` |
 | `enum` | One of the options, matched without regard to case | `enumOptions` |
 | `enums` | Any of the options, stored as one comma-separated string in the order of the options | `enumOptions` |
 
@@ -55,6 +55,41 @@ extraFields:
 A `pattern` is a JavaScript regular expression that the whole value must match, such as `'FOO-\d{1,9}'` for a ticket of a Jira project. Write it in single quotes, because YAML reads a backslash in double quotes as an escape.
 
 `new` checks the values after the questions or after the editor closes, and `check` checks them again. Without a terminal, `new` fails when a required field is missing. To leave an optional field empty without a question, pass the key with an empty value, such as `--meta area=`.
+
+## Link issues and pull requests
+
+An extra field with a `url` turns references to its values into links. A reference is a label in square brackets, such as `[FOO-1234]` or `[#42]`, and wandelzeug finds it in the rendered notes. The reference can come from the front matter, placed by `changeFormat`, or from the text of a change, as in "Fixes [FOO-1] and [FOO-2]". The following configuration links Jira tickets and GitHub pull requests:
+
+```yaml
+extraFields:
+  - key: issue
+    pattern: 'FOO-\d{1,9}'
+    url: "https://jira.corp.com/browse/{{issue}}"
+  - key: pr
+    type: int
+    label: "#{{pr}}"
+    url: "{{repositoryUrl}}/pull/{{pr}}"
+changeFormat: "{{marker}}{{#issue}}[{{issue}}] {{/issue}}{{text}}{{#pr}} ([#{{pr}}]){{/pr}}"
+```
+
+With this configuration, the following change renders as `* [FOO-1234] Added the thing. ([#42])`:
+
+```md
+---
+kind: Added
+issue: FOO-1234
+pr: 42
+---
+* Added the thing.
+```
+
+The settings work together:
+
+- `url` is a Mustache template for the web address of a value. It can use the value and `repositoryUrl`, so a GitLab merge request can link to `{{repositoryUrl}}/-/merge_requests/{{mr}}`.
+- `label` is a Mustache template for the text in brackets, which places the value once between fixed text, such as `#{{pr}}` or `!{{mr}}`. It defaults to the value itself. A label with fixed text keeps ordinary brackets, such as `[1]`, from passing for references.
+- A `string` field with a `url` needs a `pattern`, which tells wandelzeug which labels belong to the field. An `int` field matches digits.
+
+`batch` adds a definition for each new reference between the `wlz:links` markers, and `render` rebuilds them. `wlz show` and the tag message of `wlz release` end with the definitions of the references in their notes, so the links work outside the changelog too. Brackets in code, escaped brackets, and links that have a target already don't count as references.
 
 ## Check changes in CI
 

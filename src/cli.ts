@@ -53,6 +53,7 @@ import {
 } from "./changes/drafts.ts";
 import { loadFragments, recordChange } from "./changes/fragments.ts";
 import { readChangeOptions } from "./changes/options.ts";
+import { findReferences, withDefinitions } from "./changes/references.ts";
 import { askChange } from "./changes/questions.ts";
 import {
   type Invocation,
@@ -271,8 +272,8 @@ async function runBatch(invocation: InvocationOf<"batch">): Promise<void> {
   const date = invocation.date ?? today();
   const plan = await planRelease(project, invocation.target, date);
   if (invocation.dryRun) {
-    const link = plan.link === undefined ? "" : `\n${plan.link}\n`;
-    process.stdout.write(`${plan.section}\n${link}`);
+    const links = plan.links.length === 0 ? "" : `\n${plan.links.join("\n")}\n`;
+    process.stdout.write(`${plan.section}\n${links}`);
     return;
   }
 
@@ -352,8 +353,8 @@ async function runRelease(invocation: InvocationOf<"release">): Promise<void> {
 
   if (invocation.dryRun) {
     await checkTag(project, part, plan);
-    const link = plan.link === undefined ? "" : `\n${plan.link}\n`;
-    process.stdout.write(`${plan.section}\n${link}`);
+    const links = plan.links.length === 0 ? "" : `\n${plan.links.join("\n")}\n`;
+    process.stdout.write(`${plan.section}\n${links}`);
     return;
   }
 
@@ -368,7 +369,8 @@ async function runShow(invocation: InvocationOf<"show">): Promise<void> {
   if (notes === undefined) {
     throw new Error(missingNotesMessage(project, document, invocation.release));
   }
-  process.stdout.write(notes);
+  const references = findReferences(project, notes);
+  process.stdout.write(`${withDefinitions(notes, references).trimEnd()}\n`);
 }
 
 async function runNext(invocation: InvocationOf<"next">): Promise<void> {

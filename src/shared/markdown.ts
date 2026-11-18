@@ -129,3 +129,43 @@ export function listItems(markdown: string): ListItem[] | undefined {
     block.type === "list" ? block.items.map(splitListItem) : [],
   );
 }
+
+/** Tokens whose text cannot hold a reference: code, links that have a target already, and escaped characters. */
+const OPAQUE_TOKENS = [
+  "code",
+  "codespan",
+  "link",
+  "image",
+  "html",
+  "escape",
+  "def",
+];
+
+/** The child tokens of a token: its inline tokens, or the items of a list. */
+function childTokens(token: Token): readonly Token[] {
+  const { tokens, items } = token as { tokens?: Token[]; items?: Token[] };
+  return [...(tokens ?? []), ...(items ?? [])];
+}
+
+/** Collects the text of the tokens that may hold references, leaf by leaf. */
+function referenceTexts(tokens: readonly Token[]): string[] {
+  return tokens.flatMap((token) => {
+    if (OPAQUE_TOKENS.includes(token.type)) return [];
+    const children = childTokens(token);
+    if (children.length > 0) return referenceTexts(children);
+    return token.type === "text" ? [token.raw] : [];
+  });
+}
+
+const BRACKETED = /\[([^[\]\n]+)\]/g;
+
+/**
+ * Finds the labels in square brackets that may reference a link
+ * definition, such as "FOO-1" in "Fixes [FOO-1].", in the order of the
+ * text. Brackets in code, in links with a target, and escaped brackets do
+ * not count.
+ */
+export const bracketedLabels = (markdown: string): string[] =>
+  referenceTexts(lexer(markdown)).flatMap((text) =>
+    [...text.matchAll(BRACKETED)].map((match) => match[1] ?? ""),
+  );

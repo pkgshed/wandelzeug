@@ -4,6 +4,7 @@ import { notesHash, type ReleaseData } from "./data.ts";
 import {
   anchorMarker,
   dataComment,
+  definedLabels,
   insertRelease,
   knownReleases,
   LINKS_BEGIN,
@@ -150,11 +151,10 @@ describe("changelog markers", () => {
       LINKS_END,
       "",
     ].join("\n");
-    const inserted = insertRelease(
-      changelogDocument(text),
-      "S",
+    const inserted = insertRelease(changelogDocument(text), "S", [
       "[`1.1.0`]: new",
-    );
+      "[FOO-2]: ticket",
+    ]);
     expect(inserted).toBe(
       [
         anchor,
@@ -163,6 +163,7 @@ describe("changelog markers", () => {
         "",
         LINKS_BEGIN,
         "[`1.1.0`]: new",
+        "[FOO-2]: ticket",
         "[`1.0.0`]: old",
         LINKS_END,
         "",
@@ -172,8 +173,23 @@ describe("changelog markers", () => {
 
   test("insertRelease needs the link markers for a link", () => {
     expect(() =>
-      insertRelease(changelogDocument(anchor), "S", "[x]: y"),
-    ).toThrow("no <!-- BEGIN wlz:links --> marker for the link definition");
+      insertRelease(changelogDocument(anchor), "S", ["[x]: y"]),
+    ).toThrow("no <!-- BEGIN wlz:links --> marker for the link definitions");
+  });
+
+  test("definedLabels lists the labels between the link markers", () => {
+    const text = [
+      anchor,
+      "[outside]: x",
+      LINKS_BEGIN,
+      "[`1.0.0`]: a",
+      "[FOO-1]: b",
+      LINKS_END,
+    ];
+    expect(definedLabels(changelogDocument(text.join("\n")))).toEqual([
+      "`1.0.0`",
+      "FOO-1",
+    ]);
   });
 
   describe("data blocks", () => {
@@ -352,7 +368,7 @@ describe("changelog markers", () => {
   ])(
     "insertRelease places the release below the anchor when %s",
     (_, text, expected) => {
-      expect(insertRelease(changelogDocument(text), section, undefined)).toBe(
+      expect(insertRelease(changelogDocument(text), section, [])).toBe(
         expected,
       );
     },

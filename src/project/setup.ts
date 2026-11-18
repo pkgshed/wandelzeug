@@ -175,9 +175,13 @@ kinds:
 #     enumOptions: [cli, docs, tests]
 #   - key: ticket
 #     pattern: 'FOO-\\d{1,9}'
+#     url: "https://jira.example.com/browse/{{ticket}}"
 #
 # Write a pattern in single quotes, because YAML reads a backslash in
-# double quotes as an escape.
+# double quotes as an escape. A string or int field with a url turns
+# references to its values, such as [FOO-1234], into links. Its label, a
+# template such as "#{{pr}}", sets how a reference looks, and defaults to
+# the value. A string field with a url needs a pattern.
 extraFields: []
 `;
 

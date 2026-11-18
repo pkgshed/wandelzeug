@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { listItems, markdownBlocks } from "./markdown.ts";
+import { bracketedLabels, listItems, markdownBlocks } from "./markdown.ts";
 
 describe("markdown blocks", () => {
   test("blocks know their lines and keep the source of list items", () => {
@@ -65,4 +65,18 @@ describe("markdown blocks", () => {
       expect(listItems(markdown)).toBeUndefined();
     },
   );
+
+  test("bracketedLabels finds labels outside code, links and escapes", () => {
+    const markdown = [
+      "## [`1.6.0`] (2026-11-17)",
+      "",
+      "* Fixes [FOO-1] and [FOO-2], not `[FOO-3]`, \\[FOO-4\\], or [FOO-5](https://x)",
+      "  - nested **[#42]**",
+      "",
+      "```",
+      "[FOO-7]",
+      "```",
+    ].join("\n");
+    expect(bracketedLabels(markdown)).toEqual(["FOO-1", "FOO-2", "#42"]);
+  });
 });
