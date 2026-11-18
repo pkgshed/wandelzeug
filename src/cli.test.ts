@@ -667,6 +667,21 @@ describe("command line", () => {
       expect((await run("check")).exitCode).toBe(0);
     });
 
+    test("hashes with the padding of wandelzeug 0.2.1 stay valid until render shortens them", async () => {
+      await projectWithReleases();
+      const path = join(root, "CHANGELOG.md");
+      const padded = (await changelog()).replace(
+        /hash=(h1:[A-Za-z0-9+/]{22})$/gm,
+        "hash=$1==",
+      );
+      expect(padded).toMatch(/hash=h1:[A-Za-z0-9+/]{22}==$/m);
+      await writeFile(path, padded);
+
+      expect((await run("check")).exitCode).toBe(0);
+      expect((await run("render")).exitCode).toBe(0);
+      expect(await changelog()).not.toMatch(/hash=h1:\S*=/);
+    });
+
     test("an empty repositoryUrl keeps the link definitions", async () => {
       await projectWithReleases();
       await setSetting("repositoryUrl", "");

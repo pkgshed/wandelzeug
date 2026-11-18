@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 * `wlz show` also ends with the link definition of the release itself, so the version in the heading of a GitHub release description links to its comparison.
 
-<!-- wlz:data date=2026-11-18 hash=h1:X7IlqXywNOaCw/OSmJTSoQ==
+<!-- wlz:data date=2026-11-18 hash=h1:X7IlqXywNOaCw/OSmJTSoQ
 Fixed:
   - body: "* `wlz show` also ends with the link definition of the release itself, so the version in the heading of a GitHub release description links to its comparison."
 -->
@@ -40,7 +40,7 @@ Fixed:
 * The message of the tag that `wlz release` creates comes from the new `tagTemplate` setting. Its default is plain text with a subject line such as `release v1.0.0`, because git hosts show tag messages without rendering Markdown.
 * `tagHelper` holds a `create` command, an optional `check` command, and `env` variables. Each argument is a Mustache template, and the commands run without a shell. `wlz release` tags with `git tag` by default instead of semverkzeug, and checks by itself that the release files hold no uncommitted changes and that the tag is new.
 
-<!-- wlz:data date=2026-11-18 hash=h1:RaXhxDqvHNbgRQZZQ5dv8A==
+<!-- wlz:data date=2026-11-18 hash=h1:RaXhxDqvHNbgRQZZQ5dv8A
 Added:
   - body: "* `wlz COMMAND --help` and `wlz help COMMAND` show the help of one command, with its options and arguments."
   - body: "* The help uses colours on a terminal. `NO_COLOR` turns them off, and `FORCE_COLOR` keeps them in a pipe."
@@ -73,7 +73,7 @@ Changed:
 * Replacements keep version numbers in other files, such as `package.json`, in step with each release.
 * `wlz --version` prints the installed version.
 
-<!-- wlz:data date=2026-11-17 hash=h1:UAxOg0Sxvm8H/rtQ2CMAdA==
+<!-- wlz:data date=2026-11-17 hash=h1:UAxOg0Sxvm8H/rtQ2CMAdA
 Added:
   - body: "* `wlz init` sets up `.changes/config.yaml` and a changelog in the Keep a Changelog format, and onboards an existing changelog with a baseline version."
   - body: "* `wlz new` records a change as a Markdown file with YAML front matter, from options, from questions in the terminal, or in your editor. `wlz new --resume` recovers a draft that had problems."

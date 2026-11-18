@@ -12,7 +12,16 @@ describe("release data", () => {
   test("notesHash is h1: and the base64 of the first 128 bits of SHA-256", () => {
     // The first 16 bytes of SHA-256("x") are 2d711642b726b04401627ca9fbac32f5.
     const hash: string = notesHash("x");
-    expect(hash).toBe("h1:LXEWQrcmsEQBYnyp+6wy9Q==");
+    expect(hash).toBe("h1:LXEWQrcmsEQBYnyp+6wy9Q");
+  });
+
+  test("a hash with the padding of wandelzeug 0.2.1 parses into the short form", () => {
+    const short = notesHash("x");
+    const parsed = parseReleaseData(
+      `date=2026-11-17 hash=${short}==`,
+      'Fixed:\n  - body: "* Crash"',
+    );
+    expect(parsed.hash).toBe(short);
   });
 
   test("notesHash ignores line breaks and surrounding blank lines", () => {
