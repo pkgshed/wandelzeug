@@ -42,7 +42,9 @@ Bun links `wlz` into `~/.bun/bin`, which must be on your `PATH`.
 - To uninstall, run `bun remove -g wandelzeug`.
 - To complete commands and options with Tab, install the completion script for your shell, see [Shell completion](docs/completion.md).
 
-To keep wandelzeug inside another repository instead, copy the single executable file `wlz.js`, which CI publishes as the `wlz` artifact.
+To install a specific release, add its tag, as in `bun add -g git+https://github.com/pkgshed/wandelzeug.git#v0.1.0`.
+
+To keep wandelzeug inside another repository instead, download the single executable file `wlz.js` from a [release](https://github.com/pkgshed/wandelzeug/releases). To check that the release workflow built it from the tagged commit, run `gh attestation verify wlz.js --repo pkgshed/wandelzeug`.
 
 ## Get started
 
