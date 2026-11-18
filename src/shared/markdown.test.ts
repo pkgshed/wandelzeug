@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { markdownBlocks } from "./markdown.ts";
+import { listItems, markdownBlocks } from "./markdown.ts";
 
 describe("markdown blocks", () => {
   test("blocks know their lines and keep the source of list items", () => {
@@ -48,4 +48,21 @@ describe("markdown blocks", () => {
       { type: "heading", depth: 1, text: "Title", first: 2, last: 2 },
     ]);
   });
+
+  test("listItems splits each top-level item into its marker and its text", () => {
+    expect(
+      listItems("* One\n  continued\n\n- Two\n  - nested\n\n10. Three"),
+    ).toEqual([
+      { marker: "* ", text: "One\n  continued", body: "* One\n  continued" },
+      { marker: "- ", text: "Two\n  - nested", body: "- Two\n  - nested" },
+      { marker: "10. ", text: "Three", body: "10. Three" },
+    ]);
+  });
+
+  test.each(["A paragraph", "* One\n\nA paragraph", "```\n* code\n```", ""])(
+    "listItems finds no items in %p",
+    (markdown) => {
+      expect(listItems(markdown)).toBeUndefined();
+    },
+  );
 });

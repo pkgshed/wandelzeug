@@ -18,6 +18,7 @@ import {
   unreleasedPath,
 } from "../project/root.ts";
 import { displayPath } from "../shared/foundations.ts";
+import { listItems } from "../shared/markdown.ts";
 import {
   renderTemplate,
   type Template,
@@ -91,12 +92,20 @@ const releasePartials = (templates: Templates): TemplatePartials => ({
   change: asLines(templates.change),
 });
 
-/** The values of one change: its front matter, its kind and its body. */
-const changeView = (change: Change): TemplateView => ({
-  ...change.metadata,
-  kind: change.kind,
-  body: change.body,
-});
+/**
+ * The entries of one change, each with the front matter and the kind of
+ * the change. A body that holds only list items yields one entry per item,
+ * with the item as body, its marker, and its text. Any other body yields
+ * one entry, whose text is the whole body and whose marker is empty.
+ */
+function changeEntries(change: Change): TemplateView[] {
+  const values = { ...change.metadata, kind: change.kind };
+  const items = listItems(change.body);
+  if (items === undefined) {
+    return [{ ...values, body: change.body, marker: "", text: change.body }];
+  }
+  return items.map((item) => ({ ...values, ...item }));
+}
 
 /** Groups the changes by kind in the configured order and leaves out kinds without changes. */
 function kindViews(
@@ -106,7 +115,7 @@ function kindViews(
   return kinds.flatMap((kind) => {
     const members = changes.filter((change) => change.kind === kind.label);
     if (members.length === 0) return [];
-    return [{ kind: kind.label, changes: members.map(changeView) }];
+    return [{ kind: kind.label, changes: members.flatMap(changeEntries) }];
   });
 }
 

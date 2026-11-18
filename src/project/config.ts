@@ -21,7 +21,7 @@ export const CHANGES_DIR = ".changes";
 export const CONFIG_FILE = join(CHANGES_DIR, "config.yaml");
 
 /** Keys that templates fill from the change itself, so metadata may not use them. */
-export const RESERVED_KEYS = ["kind", "title", "body"];
+export const RESERVED_KEYS = ["kind", "title", "body", "marker", "text"];
 
 /** The value types of an extra field, named as in changie's custom choices. */
 export const FIELD_TYPES = ["string", "block", "int", "enum", "enums"] as const;

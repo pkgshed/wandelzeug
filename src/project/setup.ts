@@ -83,8 +83,10 @@ titleMaxLength: ${DEFAULT_CONFIG.titleMaxLength}
 versionFormat: ${yamlString(DEFAULT_CONFIG.versionFormat)}
 # Heading of a kind section. Value: kind.
 kindFormat: ${yamlString(DEFAULT_CONFIG.kindFormat)}
-# One change entry. Values: body, kind, and any front matter key, as in
-# "{{body}}{{#pr}} (#{{pr}}){{/pr}}".
+# One change entry. A change whose body is a list has an entry per item.
+# Values: body, the item or the whole body; marker, the list marker such
+# as "* "; text, the item after its marker; kind; and any front matter key,
+# as in "{{body}}{{#pr}} (#{{pr}}){{/pr}}" or "{{marker}}[{{issue}}] {{text}}".
 changeFormat: ${yamlString(DEFAULT_CONFIG.changeFormat)}
 
 # The whole release. It places the three formats above as the partials

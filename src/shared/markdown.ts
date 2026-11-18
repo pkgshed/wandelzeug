@@ -97,3 +97,35 @@ export function markdownBlocks(text: string): MarkdownBlock[] {
     return block === undefined ? [] : [block];
   });
 }
+
+/** An item of a top-level Markdown list, split into its marker and its text. */
+export type ListItem = {
+  /** The list marker with the spaces after it, such as "* " or "1. ". */
+  readonly marker: string;
+  /** The item after its marker, with its continuation lines as they are. */
+  readonly text: string;
+  /** The whole item: the marker and the text. */
+  readonly body: string;
+};
+
+const LIST_MARKER = /^\s*(?:[*+-]|\d{1,9}[.)])(?:[ \t]+|$)/;
+
+function splitListItem(body: string): ListItem {
+  const marker = LIST_MARKER.exec(body)?.[0] ?? "";
+  return { marker, text: body.slice(marker.length), body };
+}
+
+/**
+ * Splits Markdown into the items of its top-level lists. Markdown that
+ * holds anything besides lists, such as a paragraph or a code block
+ * between them, has no items.
+ */
+export function listItems(markdown: string): ListItem[] | undefined {
+  const blocks = markdownBlocks(markdown);
+  const isOnlyLists =
+    blocks.length > 0 && blocks.every((block) => block.type === "list");
+  if (!isOnlyLists) return undefined;
+  return blocks.flatMap((block) =>
+    block.type === "list" ? block.items.map(splitListItem) : [],
+  );
+}
