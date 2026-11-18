@@ -81,6 +81,13 @@ export const endMarker = (name: string): string =>
 /** The line that closes the comment of a data block. */
 const DATA_END = "-->";
 
+/** Formats the lines of a BEGIN marker that holds the data block of a release. */
+export const dataBeginMarker = (name: string, data: ReleaseData): string[] => [
+  `<!-- BEGIN wlz:release ${name}`,
+  ...formatReleaseData(data),
+  DATA_END,
+];
+
 /**
  * Formats a release as batch inserts it: the BEGIN marker that holds the
  * data block, the notes, and the END marker.
@@ -90,13 +97,7 @@ export const releaseSection = (
   data: ReleaseData,
   notes: string,
 ): string =>
-  [
-    `<!-- BEGIN wlz:release ${name}`,
-    ...formatReleaseData(data),
-    DATA_END,
-    notes,
-    endMarker(name),
-  ].join("\n");
+  [...dataBeginMarker(name, data), notes, endMarker(name)].join("\n");
 
 const ANCHOR_MARKER = /^<!--\s*wlz:releases\b(.*?)-->$/;
 const BEGIN_MARKER = /^<!--\s*BEGIN\s+wlz:release\s+(\S+)\s*-->$/;

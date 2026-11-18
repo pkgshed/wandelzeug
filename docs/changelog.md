@@ -1,6 +1,6 @@
 # The changelog
 
-This guide covers how wandelzeug finds its way around `CHANGELOG.md`, how it renders past releases again, the links of releases, the templates that render a release, and how `wlz init` adopts an existing changelog.
+This guide covers how wandelzeug finds its way around `CHANGELOG.md`, how it renders past releases again, the links of releases, the templates that render a release, and how `wlz init` and `wlz import` adopt an existing changelog.
 
 ## Markers
 
@@ -62,7 +62,7 @@ The command renders the notes of each release and the link definitions with the 
 
 The hash in the data block shows whether someone edited the notes of a release by hand. `wlz check` reports such releases, and `wlz render` refuses to overwrite them. To keep an edit, such as a typo fix, make the same edit in the data block of the release, then run `wlz render --force`, which renders over the edited notes. When a release has changes of a kind that the configuration no longer lists, both commands name the release and the kind.
 
-Releases from before data blocks keep their notes. While any release lacks a data block, `wlz render` also keeps the link definitions as they are, because a link can use the date of its release. It keeps them as well while `repositoryUrl` is empty, so links that are off by accident don't wipe out the definitions.
+Releases without a data block keep their notes, and [`wlz import`](#import-existing-releases) can give them one. While any release lacks a data block, `wlz render` also keeps the link definitions as they are, because a link can use the date of its release. It keeps them as well while `repositoryUrl` is empty, so links that are off by accident don't wipe out the definitions.
 
 ## Show the notes of a release
 
@@ -135,4 +135,24 @@ When a `CHANGELOG.md` exists already, `init` only adds the release anchor and th
 
 `init` prints the lines of the anchor and the markers, and the baseline. They are plain text, so if a guess is wrong, move a marker line or edit the baseline by hand.
 
-The releases from before wandelzeug stay as they are, without data blocks, so `wlz render` leaves them alone.
+The releases from before wandelzeug stay as they are, without data blocks, so `wlz render` leaves them alone. To give them data blocks as well, pass `--import`, which works like [`wlz import`](#import-existing-releases). The import picks the baseline itself, so `--import` doesn't go with `--baseline`.
+
+## Import existing releases
+
+To give data blocks to the releases of a changelog that you onboarded before, run the following command:
+
+```sh
+wlz import
+```
+
+The import goes through the marked releases without a data block, newest first, and then through the releases from before wandelzeug, in the order of the file. A release fits when it has the shape that wandelzeug renders:
+
+- Its heading names the version and a date as `YYYY-MM-DD`, such as `## [1.4.2] - 2025-03-02`.
+- Below the heading, each section heading names a configured kind, such as `### Added`.
+- Each section holds only lists, and each list item becomes a change.
+
+A fitting release keeps its notes exactly as they are, and the hash in its data block covers that text. Its link definition moves inside the `wlz:links` markers, so `wlz render` manages it. Other link definitions stay where they are.
+
+The import stops at the first release that doesn't fit, and names the release, its line, and the reason, such as a section heading that matches no configured kind, or a paragraph next to the lists. A release from before wandelzeug that stops the import becomes the baseline, and it and the releases below it stay as they are. To import them too, fix what the message names, for example by adding the kind to the configuration or by moving a summary into a list item, then run `wlz import` again. When every release has a data block, the import removes the baseline, because the changelog no longer needs it.
+
+After the import, set `repositoryUrl` if it's empty, then run `wlz render` to give the imported releases the layout of your templates.

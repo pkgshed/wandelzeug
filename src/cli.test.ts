@@ -698,6 +698,110 @@ describe("command line", () => {
     });
   });
 
+  describe("import", () => {
+    const history = [
+      "# Changelog",
+      "",
+      "## [1.1.0] - 2025-03-01",
+      "",
+      "### Misc",
+      "",
+      "- Tidied up",
+      "",
+      "## [1.0.0] - 2025-01-01",
+      "",
+      "### Added",
+      "",
+      "- First release",
+      "",
+      "[1.1.0]: https://example.com/compare/v1.0.0...v1.1.0",
+      "[1.0.0]: https://example.com/releases/tag/v1.0.0",
+      "",
+    ].join("\n");
+
+    const writeHistory = (text: string) =>
+      writeFile(join(root, "CHANGELOG.md"), text);
+
+    test("init --import explains where it stopped and what to do next", async () => {
+      await writeHistory(
+        history.replace(
+          "## [1.1.0]",
+          "## [1.2.0] - 2025-04-01\n\n### Fixed\n\n- Crash\n\n## [1.1.0]",
+        ),
+      );
+      const result = await run("init", "--import");
+      expect(result.exitCode).toBe(0);
+      const lines = (await readFile(join(root, "CHANGELOG.md"), "utf8")).split(
+        "\n",
+      );
+      const line = lines.indexOf("## [1.1.0] - 2025-03-01") + 1;
+      expect(result.stdout).toEndWith(
+        [
+          "imported 1 release: 1.2.0",
+          `stopped at release 1.1.0 on line ${line}: its section "Misc" matches no configured kind`,
+          "1.1.0 is now the baseline, and it and the releases below it stay as they are",
+          'to import them too, change what stopped the import and run "wlz import" again',
+          "",
+        ].join("\n"),
+      );
+      expect((await run("latest")).stdout).toBe("1.2.0\n");
+    });
+
+    test("import converts the rest after a fix, and then finds nothing", async () => {
+      await writeHistory(history);
+      await run("init", "--import");
+      await writeHistory(
+        (await readFile(join(root, "CHANGELOG.md"), "utf8")).replace(
+          "### Misc",
+          "### Changed",
+        ),
+      );
+
+      expect(await run("import")).toMatchObject({
+        exitCode: 0,
+        stdout: [
+          "imported 2 releases: 1.1.0, 1.0.0",
+          "moved 2 link definitions inside the wlz:links markers",
+          "removed the baseline, because every release has a data block now",
+          "",
+        ].join("\n"),
+      });
+      expect((await run("check")).exitCode).toBe(0);
+      expect((await run("import")).stdout).toBe(
+        "found no releases without a data block\n",
+      );
+    });
+
+    test("init without --import keeps the history as it is", async () => {
+      await writeHistory(history);
+      const result = await run("init");
+      expect(result.stdout).not.toContain("imported");
+      const text = await readFile(join(root, "CHANGELOG.md"), "utf8");
+      expect(text).not.toContain("BEGIN wlz:release");
+    });
+
+    test("init --import takes no --baseline", async () => {
+      await writeHistory(history);
+      const result = await run("init", "--import", "--baseline", "1.0.0");
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr).toContain(
+        "init: --import picks the baseline itself, so it takes no --baseline",
+      );
+    });
+
+    test("render keeps the link definitions while repositoryUrl is empty", async () => {
+      await writeHistory(history.replace("### Misc", "### Changed"));
+      await run("init", "--import");
+      const result = await run("render");
+      expect(result.stdout).toBe(
+        "rendered 2 releases in CHANGELOG.md\nkept the link definitions as they are, because repositoryUrl is empty\n",
+      );
+      expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toContain(
+        "<!-- BEGIN wlz:links -->\n[1.1.0]: https://example.com/compare/v1.0.0...v1.1.0\n[1.0.0]: https://example.com/releases/tag/v1.0.0\n<!-- END wlz:links -->",
+      );
+    });
+  });
+
   describe("release", () => {
     let helperDirectory: string;
 

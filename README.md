@@ -22,7 +22,7 @@ wandelzeug records each change as its own small Markdown file and turns the coll
 - **Release in one step:** `wlz release auto` picks the next version from the kinds of the changes, writes the changelog, commits it, and tags the commit through [semverkzeug](https://github.com/0x5a17ed/semverkzeug).
 - **Version numbers in step:** the version in files such as `package.json` follows each release.
 - **Your layout:** Mustache templates shape the file names, the headings, the entries, and the whole release, and `wlz render` applies a changed template to past releases too.
-- **Your history:** `wlz init` adopts an existing changelog and leaves everything that is already there in place.
+- **Your history:** `wlz init` adopts an existing changelog and leaves everything that is already there in place. With `--import`, its releases get data blocks, so they render with your templates too.
 - **Monorepos:** each project keeps its own `.changes` directory.
 - **Shell completion:** Tab completes commands, options, and bumps in bash, zsh, fish, PowerShell, and Nushell.
 
