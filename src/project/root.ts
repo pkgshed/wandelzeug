@@ -4,7 +4,7 @@
 
 import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { displayPath, withContext } from "../shared/foundations.ts";
+import { displayPath, mapValues, withContext } from "../shared/foundations.ts";
 import { parseTemplate, type Template } from "../shared/templates.ts";
 import {
   CHANGES_DIR,
@@ -24,6 +24,14 @@ export type Templates = {
   readonly release: Template;
   readonly link: Template;
   readonly tag: Template;
+  readonly tagHelper: TagHelperTemplates;
+};
+
+/** The commands of the tag helper, each argument and each variable value a template. */
+export type TagHelperTemplates = {
+  readonly check: readonly Template[] | undefined;
+  readonly create: readonly Template[];
+  readonly env: Readonly<Record<string, Template>>;
 };
 
 /** The values that describe a release: its name, date, tag and predecessor. */
@@ -34,6 +42,20 @@ const RELEASE_VALUES = [
   "previousVersion",
   "previousTag",
 ];
+
+/**
+ * The values of the tag helper: those of a release, the bump, the project
+ * root, the tag message as text and as a file, and the release commit,
+ * which exists only once the check has passed.
+ */
+const TAG_CHECK_VALUES = [
+  ...RELEASE_VALUES,
+  "bump",
+  "root",
+  "message",
+  "messageFile",
+];
+const TAG_CREATE_VALUES = [...TAG_CHECK_VALUES, "commit"];
 
 /** The partials that releaseTemplate can place, filled by the formats of the same name. */
 const RELEASE_PARTIALS = ["version", "kind", "change"];
@@ -109,6 +131,37 @@ function parseLayoutTemplate(setting: string, source: string): Template {
   return template;
 }
 
+/** Parses the arguments of a command of the tag helper. */
+const parseCommand = (
+  setting: string,
+  args: readonly string[],
+  allowed: readonly string[],
+): Template[] =>
+  args.map((arg, index) =>
+    parseTemplateWithNames(`${setting}[${index}]`, arg, allowed),
+  );
+
+function compileTagHelper(config: Config): TagHelperTemplates {
+  const { check, create, env } = config.tagHelper;
+  return {
+    check:
+      check === undefined
+        ? undefined
+        : parseCommand("tagHelper.check", check, TAG_CHECK_VALUES),
+    create: parseCommand("tagHelper.create", create, TAG_CREATE_VALUES),
+    env: Object.fromEntries(
+      Object.entries(env).map(([name, value]) => [
+        name,
+        parseTemplateWithNames(
+          `tagHelper.env.${name}`,
+          value,
+          TAG_CHECK_VALUES,
+        ),
+      ]),
+    ),
+  };
+}
+
 function compileTemplates(config: Config): Templates {
   return {
     fragmentName: parseFragmentNameTemplate(config.fragmentName),
@@ -121,6 +174,7 @@ function compileTemplates(config: Config): Templates {
     change: parseSettingTemplate("changeFormat", config.changeFormat),
     release: parseLayoutTemplate("releaseTemplate", config.releaseTemplate),
     tag: parseLayoutTemplate("tagTemplate", config.tagTemplate),
+    tagHelper: compileTagHelper(config),
     link: parseTemplateWithNames("linkFormat", config.linkFormat, [
       ...RELEASE_VALUES,
       "repositoryUrl",

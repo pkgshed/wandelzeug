@@ -65,7 +65,7 @@ import {
   checkProject,
   type GitRef,
 } from "./project/checks.ts";
-import { checkTag, releaseAndTag } from "./project/release.ts";
+import { checkRelease, releaseAndTag } from "./project/release.ts";
 import {
   changelogPath,
   openProject,
@@ -352,7 +352,7 @@ async function runRelease(invocation: InvocationOf<"release">): Promise<void> {
     bump === "auto" ? autoBump(plan.fragments, project.config.kinds) : bump;
 
   if (invocation.dryRun) {
-    await checkTag(project, part, plan);
+    await checkRelease(project, part, plan);
     const links = plan.links.length === 0 ? "" : `\n${plan.links.join("\n")}\n`;
     process.stdout.write(`${plan.section}\n${links}`);
     return;

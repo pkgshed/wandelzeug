@@ -26,6 +26,20 @@ export async function runGit(
   return stdout;
 }
 
+/** Runs git in a directory and reports whether it exited with status 0, as for "git rev-parse --verify". */
+export async function gitSucceeds(
+  directory: string,
+  args: readonly string[],
+): Promise<boolean> {
+  const child = Bun.spawn(["git", ...args], {
+    cwd: directory,
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  return (await child.exited) === 0;
+}
+
 /**
  * Reads the URL of the origin remote as the configuration spells it, or
  * returns undefined without git, a repository or an origin remote. It reads

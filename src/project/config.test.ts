@@ -196,6 +196,31 @@ describe("configuration", () => {
     ],
     [{ releaseData: "yes" }, /releaseData: must be true or false/],
     [
+      { tagHelper: "semverkzeug" },
+      /tagHelper: must be a mapping of the steps check and create, which replaced the command string of wandelzeug 0\.1/,
+    ],
+    [{ tagHelper: { check: ["x"] } }, /tagHelper\.create: is required/],
+    [
+      { tagHelper: { create: [] } },
+      /tagHelper\.create: must be a non-empty list of arguments/,
+    ],
+    [
+      { tagHelper: { create: ["git", "{{nope}}"] } },
+      /tagHelper\.create\[1\]: unknown value \{\{nope\}\}/,
+    ],
+    [
+      { tagHelper: { check: ["x", "{{commit}}"], create: ["x"] } },
+      /tagHelper\.check\[1\]: unknown value \{\{commit\}\}/,
+    ],
+    [
+      { tagHelper: { create: ["x"], env: { "1BAD": "x" } } },
+      /must be letters, digits and underscores, not starting with a digit/,
+    ],
+    [
+      { tagHelper: { create: ["x"], env: { NOTE: "{{commit}}" } } },
+      /tagHelper\.env\.NOTE: unknown value \{\{commit\}\}/,
+    ],
+    [
       { replacements: { path: "package.json" } },
       /replacements: must be a list/,
     ],

@@ -1,6 +1,6 @@
 # Releases
 
-This guide covers how wandelzeug picks versions, how `wlz release` commits and tags a release, the tag messages, how version numbers in other files stay in step, and how projects in a monorepo work.
+This guide covers how wandelzeug picks versions, how `wlz release` commits and tags a release, how to choose the tagging command, the tag messages, how version numbers in other files stay in step, and how projects in a monorepo work.
 
 ## Versions
 
@@ -14,7 +14,7 @@ To see a version without writing anything, use one of the following commands:
 
 ## Release and tag
 
-`batch` only changes the changelog. To also commit the release and tag it, use `release`, which takes a bump: `major`, `minor`, `patch`, or `auto`. It hands the tagging to [semverkzeug](https://github.com/0x5a17ed/semverkzeug), which derives versions from git tags and creates annotated, optionally signed tags:
+`batch` only changes the changelog. To also commit the release and tag it, use `release`, which takes a bump: `major`, `minor`, `patch`, or `auto`:
 
 ```sh
 wlz release auto
@@ -22,15 +22,47 @@ wlz release auto
 
 `release` takes these steps:
 
-1. It asks semverkzeug for a dry run of the bump with the version that the changelog expects. semverkzeug also checks that the working tree is clean. When the tag history and the changelog disagree, `release` stops before it changes anything.
+1. It checks that the files of the release, such as the changelog, hold no uncommitted changes, and that the tag doesn't exist yet. Then it runs the `check` command of the tag helper, if there is one. When a check fails, `release` stops before it changes anything.
 2. It adds the release to the changelog, updates the files of the [replacements](#update-version-numbers-in-other-files), removes the change files, and commits all of them as `release 1.2.0`.
-3. It has semverkzeug tag that commit, with a message that `tagTemplate` renders, see [Tag messages](#tag-messages).
+3. It runs the `create` command of the tag helper, which tags that commit with a message that `tagTemplate` renders, see [Tag messages](#tag-messages).
 
-To check a release without changing anything, pass `--dry-run`. If tagging fails after the commit, for example because signing fails, the error names the untagged commit and the command to tag it.
+To check a release without changing anything, pass `--dry-run`. If tagging fails after the commit, for example because signing fails, the error names the untagged commit, keeps the tag message in a file, and shows the command to tag the commit.
 
-`release` needs semverkzeug 0.8.0 or later, whose `bump` command has the options `--expect`, `--message-file`, and `--dry-run`. The `tagHelper` setting in `.changes/config.yaml` chooses the command, and defaults to `semverkzeug`. It runs through the shell, so it can carry arguments, as in `nix run nixpkgs#semverkzeug --`. Any other command that accepts `bump PART` with those options works as well.
+## Choose how releases get tagged
 
-In a monorepo, semverkzeug scopes the tags of a project by its directory, as in `mod/v1.2.0`. Set `tagPrefix` to `mod/v` so that the compare links use those tags.
+The `tagHelper` setting in `.changes/config.yaml` holds the commands that tag a release. By default, git creates an annotated tag, which it signs when the git setting `tag.gpgSign` is on:
+
+```yaml
+tagHelper:
+  create: [git, tag, --annotate, --cleanup=whitespace, --file, "{{messageFile}}", "{{tag}}", "{{commit}}"]
+```
+
+The setting has these entries:
+
+- `create`: the command that creates the tag.
+- `check`: an optional command that runs before anything changes. When it fails, the release stops.
+- `env`: environment variables for both commands, on top of those of wandelzeug, such as `GIT_COMMITTER_EMAIL: "release@example.com"`.
+
+The commands run in the project root without a shell. Each argument and each variable value is a Mustache template with the following values:
+
+| Value | Meaning |
+|-------|---------|
+| `version`, `date`, `tag`, `previousVersion`, `previousTag` | The values of `versionFormat` |
+| `bump` | The part of the version that the release bumps: `major`, `minor`, or `patch` |
+| `root` | The project root |
+| `message` | The tag message that `tagTemplate` renders |
+| `messageFile` | A file that holds the tag message |
+| `commit` | The release commit, which only `create` sees, because it exists only after the checks |
+
+To tag with [semverkzeug](https://github.com/0x5a17ed/semverkzeug) 0.8.0 or later, which derives versions from git tags and also checks that the version of the changelog follows from them, use the following setting:
+
+```yaml
+tagHelper:
+  check: [semverkzeug, -C, "{{root}}", bump, "{{bump}}", --expect, "{{version}}", --dry-run]
+  create: [semverkzeug, -C, "{{root}}", bump, "{{bump}}", --expect, "{{version}}", --message-file, "{{messageFile}}"]
+```
+
+In a monorepo, semverkzeug scopes the tags of a project by its directory, as in `mod/v1.2.0`. Set `tagPrefix` to `mod/v` so that the compare links and the check for an existing tag use those tags.
 
 ## Tag messages
 
