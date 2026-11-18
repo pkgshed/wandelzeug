@@ -23,6 +23,7 @@ export type Templates = {
   readonly change: Template;
   readonly release: Template;
   readonly link: Template;
+  readonly tag: Template;
 };
 
 /** The values that describe a release: its name, date, tag and predecessor. */
@@ -38,15 +39,16 @@ const RELEASE_VALUES = [
 const RELEASE_PARTIALS = ["version", "kind", "change"];
 
 /**
- * Parses the template of a setting. Only releaseTemplate may use partials,
- * because a format that placed itself would never stop rendering.
+ * Parses the template of a setting. Only the templates of a whole release
+ * may use partials, because a format that placed itself would never stop
+ * rendering.
  */
 function parseSettingTemplate(setting: string, source: string): Template {
   const template = withContext(setting, () => parseTemplate(source));
   const [partial] = template.partials;
   if (partial !== undefined) {
     throw new Error(
-      `${setting}: the partial {{> ${partial}}} belongs in releaseTemplate`,
+      `${setting}: the partial {{> ${partial}}} belongs in releaseTemplate or tagTemplate`,
     );
   }
   return template;
@@ -93,15 +95,15 @@ function parseTemplateWithNames(
   return template;
 }
 
-/** Parses releaseTemplate, which may place the formats as partials. */
-function parseReleaseTemplate(source: string): Template {
-  const template = withContext("releaseTemplate", () => parseTemplate(source));
+/** Parses a template of a whole release, such as releaseTemplate, which may place the formats as partials. */
+function parseLayoutTemplate(setting: string, source: string): Template {
+  const template = withContext(setting, () => parseTemplate(source));
   const unknown = template.partials.find(
     (partial) => !RELEASE_PARTIALS.includes(partial),
   );
   if (unknown !== undefined) {
     throw new Error(
-      `releaseTemplate: unknown partial {{> ${unknown}}}, expected one of: ${RELEASE_PARTIALS.join(", ")}`,
+      `${setting}: unknown partial {{> ${unknown}}}, expected one of: ${RELEASE_PARTIALS.join(", ")}`,
     );
   }
   return template;
@@ -117,7 +119,8 @@ function compileTemplates(config: Config): Templates {
     ),
     kind: parseTemplateWithNames("kindFormat", config.kindFormat, ["kind"]),
     change: parseSettingTemplate("changeFormat", config.changeFormat),
-    release: parseReleaseTemplate(config.releaseTemplate),
+    release: parseLayoutTemplate("releaseTemplate", config.releaseTemplate),
+    tag: parseLayoutTemplate("tagTemplate", config.tagTemplate),
     link: parseTemplateWithNames("linkFormat", config.linkFormat, [
       ...RELEASE_VALUES,
       "repositoryUrl",

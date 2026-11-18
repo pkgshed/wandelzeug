@@ -13,7 +13,6 @@ import {
   removeFragments,
   writeRelease,
 } from "../changelog/releases.ts";
-import { withDefinitions } from "../changes/references.ts";
 import { errorMessage } from "../shared/foundations.ts";
 import { runGit } from "../shared/git.ts";
 import { type Bump, formatVersion } from "../shared/versions.ts";
@@ -103,9 +102,9 @@ async function commitRelease(
 }
 
 /**
- * Tags the release commit through the helper, with the release notes as
- * the tag message. The message ends with the definitions of the references
- * in the notes, so their links work outside the changelog.
+ * Tags the release commit through the helper, with the message that
+ * tagTemplate renders. Git hosts show tag messages as plain text, so that
+ * template differs from the one for the changelog.
  */
 async function tagRelease(
   project: Project,
@@ -115,8 +114,7 @@ async function tagRelease(
   const directory = await mkdtemp(join(tmpdir(), "wlz-release-"));
   const messageFile = join(directory, "notes.md");
   try {
-    const message = withDefinitions(plan.notes, plan.references);
-    await writeFile(messageFile, `${message}\n`);
+    await writeFile(messageFile, `${plan.tagMessage}\n`);
     await runTagHelper(project, [
       ...bumpArguments(project, part, plan),
       "--message-file",

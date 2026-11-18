@@ -103,6 +103,7 @@ The following settings in `.changes/config.yaml` are templates:
 | `changeFormat` | `{{body}}` | `body`, `marker`, `text`, `kind`, and any front matter key, such as `{{body}}{{#pr}} (#{{pr}}){{/pr}}` |
 | `releaseTemplate` | See the following example | The values of `versionFormat`, and `kinds`, where each kind has a `kind` and its `changes` |
 | `linkFormat` | See [Links](#links) | The values of `versionFormat`, and `repositoryUrl` |
+| `tagTemplate` | See [Tag messages](releases.md#tag-messages) | The values of `releaseTemplate`, and `references` |
 
 `releaseTemplate` renders a whole release. By default, it places the three formats as the partials `{{> version}}`, `{{> kind}}`, and `{{> change}}`, each as whole lines:
 

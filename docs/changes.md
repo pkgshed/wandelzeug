@@ -89,7 +89,7 @@ The settings work together:
 - `label` is a Mustache template for the text in brackets, which places the value once between fixed text, such as `#{{pr}}` or `!{{mr}}`. It defaults to the value itself. A label with fixed text keeps ordinary brackets, such as `[1]`, from passing for references.
 - A `string` field with a `url` needs a `pattern`, which tells wandelzeug which labels belong to the field. An `int` field matches digits.
 
-`batch` adds a definition for each new reference between the `wlz:links` markers, and `render` rebuilds them. `wlz show` and the tag message of `wlz release` end with the definitions of the references in their notes, so the links work outside the changelog too. Brackets in code, escaped brackets, and links that have a target already don't count as references.
+`batch` adds a definition for each new reference between the `wlz:links` markers, and `render` rebuilds them. `wlz show` ends with the definitions of the references in its notes, so the links work outside the changelog too. The tag message of `wlz release` gets them through `tagTemplate`, see [Tag messages](releases.md#tag-messages). Brackets in code, escaped brackets, and links that have a target already don't count as references.
 
 ## Check changes in CI
 

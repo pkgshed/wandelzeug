@@ -195,6 +195,71 @@ describe("project workflow", () => {
     );
   });
 
+  test("a tag template can list the entries and their links as plain text", async () => {
+    const tagTemplate = [
+      "release {{tag}}",
+      "",
+      "{{#kinds}}",
+      "{{#changes}}",
+      "{{> change}}",
+      "{{/changes}}",
+      "{{/kinds}}",
+      "",
+      "{{#references}}",
+      "[{{label}}]: <{{url}}>",
+      "{{/references}}",
+      "",
+    ].join("\n");
+    await writeConfig(
+      root,
+      Bun.YAML.stringify({
+        repositoryUrl: "https://gitlab.corp.com/project-url",
+        changeFormat:
+          "{{marker}}{{#issue}}[{{issue}}] {{/issue}}{{text}}{{#mr}} ([!{{mr}}]){{/mr}}",
+        tagTemplate,
+        extraFields: [
+          {
+            key: "issue",
+            pattern: "FOO-\\d{1,9}",
+            url: "https://jira.corp.com/browse/{{issue}}",
+          },
+          {
+            key: "mr",
+            type: "int",
+            label: "!{{mr}}",
+            url: "{{repositoryUrl}}/-/merge_requests/{{mr}}",
+          },
+        ],
+      }),
+    );
+    await writeChangelog(
+      root,
+      "<!-- BEGIN wlz:links -->",
+      "<!-- END wlz:links -->",
+    );
+    const project = await loadProject(root);
+    await recordChange(
+      project,
+      change("Added", "* Added the thing.", { issue: "FOO-1234", mr: 19 }),
+    );
+
+    const plan = await planRelease(
+      project,
+      releaseTarget("1.0.0"),
+      isoDate("2026-11-17"),
+    );
+    expect(plan.tagMessage).toBe(
+      [
+        "release v1.0.0",
+        "",
+        "* [FOO-1234] Added the thing. ([!19])",
+        "",
+        "[FOO-1234]: <https://jira.corp.com/browse/FOO-1234>",
+        "[!19]: <https://gitlab.corp.com/project-url/-/merge_requests/19>",
+      ].join("\n"),
+    );
+  });
+
   test("a release template can replace the whole layout", async () => {
     const releaseTemplate = [
       "# Release {{version}}",

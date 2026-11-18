@@ -954,7 +954,7 @@ describe("command line", () => {
         `-C ${root} bump minor --expect 0.1.0 --message-file `,
       );
       expect(await readFile(messageCopy(), "utf8")).toBe(
-        "## [`0.1.0`] (2026-11-17)\n\n### Added\n\n* Feature\n",
+        "release v0.1.0\n\nAdded:\n* Feature\n",
       );
 
       expect(await headSubject()).toBe("release 0.1.0");
@@ -986,8 +986,19 @@ describe("command line", () => {
       await commitAll(root, "link issues");
 
       expect((await run("release", "auto")).exitCode).toBe(0);
-      expect(await readFile(messageCopy(), "utf8")).toEndWith(
-        "* Fixes [FOO-1]\n\n[FOO-1]: https://jira.corp.com/browse/FOO-1\n",
+      expect(await readFile(messageCopy(), "utf8")).toBe(
+        [
+          "release v0.1.0",
+          "",
+          "Added:",
+          "* Feature",
+          "",
+          "Fixed:",
+          "* Fixes [FOO-1]",
+          "",
+          "[FOO-1]: <https://jira.corp.com/browse/FOO-1>",
+          "",
+        ].join("\n"),
       );
     });
 

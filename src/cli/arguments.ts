@@ -214,7 +214,7 @@ const releaseCommand = command(
   }),
   {
     brief: message`Add the unreleased changes, commit, and tag the commit`,
-    description: message`Runs the tagHelper from the configuration, semverkzeug by default. It first checks that the helper arrives at the same version. Then it commits the changelog, the removed change files, and the files of the replacements, and tags that commit with the release notes as the tag message. ${BUMP_EXPLANATION}`,
+    description: message`Runs the tagHelper from the configuration, semverkzeug by default. It first checks that the helper arrives at the same version. Then it commits the changelog, the removed change files, and the files of the replacements, and tags that commit with the plain text message that the tagTemplate setting renders. ${BUMP_EXPLANATION}`,
   },
 );
 

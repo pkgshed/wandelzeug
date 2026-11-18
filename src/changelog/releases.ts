@@ -192,6 +192,26 @@ export function renderRelease(
   return renderTemplate(project.templates.release, view, partials).trim();
 }
 
+/**
+ * Renders the tag message of a release through tagTemplate. The template
+ * sees what releaseTemplate sees, and the references of the notes, each
+ * with its label and its url. Blank lines around the message do not count.
+ */
+export function renderTagMessage(
+  project: Project,
+  values: ReleaseValues,
+  changes: readonly Change[],
+  references: readonly Reference[],
+): string {
+  const view = {
+    ...values,
+    kinds: kindViews(project.config.kinds, changes),
+    references: references.map(({ label, url }) => ({ label, url })),
+  };
+  const partials = releasePartials(project.templates);
+  return renderTemplate(project.templates.tag, view, partials).trim();
+}
+
 const repositoryUrlOf = (project: Project): string =>
   project.config.repositoryUrl.replace(/\/+$/, "");
 
@@ -324,6 +344,8 @@ export type ReleasePlan = {
   readonly links: readonly string[];
   /** The references in the notes, which a tag message needs to define. */
   readonly references: readonly Reference[];
+  /** The message of the tag that "wlz release" creates, as tagTemplate renders it. */
+  readonly tagMessage: string;
   /** The whole changelog after the insertion. */
   readonly content: string;
   /** The files besides the changelog that the replacements rewrite. */
@@ -378,6 +400,7 @@ export async function planRelease(
     section,
     links,
     references,
+    tagMessage: renderTagMessage(project, values, fragments, references),
     content: insertRelease(document, section, links),
     updates: await planReplacements(project.replacements, values),
     fragments,
