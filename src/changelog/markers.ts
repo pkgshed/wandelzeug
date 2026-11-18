@@ -490,38 +490,41 @@ export const currentNotes = (
     .join("\n")
     .trim();
 
-/** Inserts a link definition right below the BEGIN wlz:links marker, so the newest link comes first. */
-function insertLink(
+/**
+ * Inserts link definitions right below the BEGIN wlz:links marker, so the
+ * definitions of the newest release come first.
+ */
+function insertLinks(
   document: ChangelogDocument,
-  link: string | undefined,
+  links: readonly string[],
 ): readonly string[] {
-  if (link === undefined) return document.lines;
+  if (links.length === 0) return document.lines;
   if (document.links === undefined) {
-    throw new Error(`no ${LINKS_BEGIN} marker for the link definition`);
+    throw new Error(`no ${LINKS_BEGIN} marker for the link definitions`);
   }
   const { begin } = document.links;
   return [
     ...document.lines.slice(0, begin + 1),
-    link,
+    ...links,
     ...document.lines.slice(begin + 1),
   ];
 }
 
 /**
  * Inserts a release section right below the release anchor, so the newest
- * release comes first, and its link definition below the BEGIN wlz:links
+ * release comes first, and its link definitions below the BEGIN wlz:links
  * marker. Every other line of the changelog stays as it is. The link
- * markers sit below the release anchor, so the link leaves that index
+ * markers sit below the release anchor, so the links leave that index
  * valid.
  */
 export function insertRelease(
   document: ChangelogDocument,
   section: string,
-  link: string | undefined,
+  links: readonly string[],
 ): string {
-  const withLink = insertLink(document, link);
-  const before = withLink.slice(0, document.anchor + 1);
-  const after = withLink.slice(document.anchor + 1);
+  const withLinks = insertLinks(document, links);
+  const before = withLinks.slice(0, document.anchor + 1);
+  const after = withLinks.slice(document.anchor + 1);
   const needsGap = after[0]?.trim() !== "";
   const lines = [
     ...before,
@@ -531,6 +534,18 @@ export function insertRelease(
     ...after,
   ];
   return lines.join(document.newline);
+}
+
+const DEFINITION_LABEL = /^\s*\[([^\]]+)\]:/;
+
+/** Lists the labels of the link definitions between the link markers. */
+export function definedLabels(document: ChangelogDocument): string[] {
+  const links = document.links;
+  if (links === undefined) return [];
+  return document.lines.slice(links.begin + 1, links.end).flatMap((line) => {
+    const label = DEFINITION_LABEL.exec(line)?.[1];
+    return label === undefined ? [] : [label];
+  });
 }
 
 /** Lines of the changelog to replace, from start to end. An end right before the start inserts at the start. */

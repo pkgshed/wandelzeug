@@ -18,6 +18,13 @@ import {
   unreleasedPath,
 } from "../project/root.ts";
 import { displayPath } from "../shared/foundations.ts";
+import { listItems } from "../shared/markdown.ts";
+import {
+  definitionLine,
+  findReferences,
+  normalizeLabel,
+  type Reference,
+} from "../changes/references.ts";
 import {
   renderTemplate,
   type Template,
@@ -37,6 +44,8 @@ import {
 } from "../shared/versions.ts";
 import { notesHash, type ReleaseData } from "./data.ts";
 import {
+  type ChangelogDocument,
+  definedLabels,
   insertRelease,
   knownReleases,
   LINKS_BEGIN,
@@ -91,12 +100,20 @@ const releasePartials = (templates: Templates): TemplatePartials => ({
   change: asLines(templates.change),
 });
 
-/** The values of one change: its front matter, its kind and its body. */
-const changeView = (change: Change): TemplateView => ({
-  ...change.metadata,
-  kind: change.kind,
-  body: change.body,
-});
+/**
+ * The entries of one change, each with the front matter and the kind of
+ * the change. A body that holds only list items yields one entry per item,
+ * with the item as body, its marker, and its text. Any other body yields
+ * one entry, whose text is the whole body and whose marker is empty.
+ */
+function changeEntries(change: Change): TemplateView[] {
+  const values = { ...change.metadata, kind: change.kind };
+  const items = listItems(change.body);
+  if (items === undefined) {
+    return [{ ...values, body: change.body, marker: "", text: change.body }];
+  }
+  return items.map((item) => ({ ...values, ...item }));
+}
 
 /** Groups the changes by kind in the configured order and leaves out kinds without changes. */
 function kindViews(
@@ -106,7 +123,7 @@ function kindViews(
   return kinds.flatMap((kind) => {
     const members = changes.filter((change) => change.kind === kind.label);
     if (members.length === 0) return [];
-    return [{ kind: kind.label, changes: members.map(changeView) }];
+    return [{ kind: kind.label, changes: members.flatMap(changeEntries) }];
   });
 }
 
@@ -272,6 +289,24 @@ const releaseData = (
   })),
 });
 
+/**
+ * Lists the link definitions that a new release adds: its own link, and
+ * the definitions of its references that the changelog lacks so far.
+ */
+function newLinks(
+  project: Project,
+  document: ChangelogDocument,
+  values: ReleaseValues,
+  references: readonly Reference[],
+): string[] {
+  const link = renderLink(project, values);
+  const defined = new Set(definedLabels(document).map(normalizeLabel));
+  const definitions = references
+    .filter((reference) => !defined.has(normalizeLabel(reference.label)))
+    .map(definitionLine);
+  return [...(link === undefined ? [] : [link]), ...definitions];
+}
+
 /** The changelog with a new release, and the fragments the release consumes. */
 export type ReleasePlan = {
   readonly path: string;
@@ -281,8 +316,14 @@ export type ReleasePlan = {
   readonly notes: string;
   /** The release with its markers, and its data block when releaseData is on, as batch inserts it. */
   readonly section: string;
-  /** The link definition that batch inserts below the links anchor, when links are on. */
-  readonly link: string | undefined;
+  /**
+   * The link definitions that batch inserts below the BEGIN wlz:links
+   * marker: the link of the release when links are on, and the definitions
+   * of the references that no earlier release defined.
+   */
+  readonly links: readonly string[];
+  /** The references in the notes, which a tag message needs to define. */
+  readonly references: readonly Reference[];
   /** The whole changelog after the insertion. */
   readonly content: string;
   /** The files besides the changelog that the replacements rewrite. */
@@ -323,10 +364,11 @@ export async function planRelease(
     ? releaseData(date, fragments, project.config.kinds, notes)
     : undefined;
   const section = releaseSection(values.version, data, notes);
-  const link = renderLink(project, values);
-  if (link !== undefined && document.links === undefined) {
+  const references = findReferences(project, notes);
+  const links = newLinks(project, document, values, references);
+  if (links.length > 0 && document.links === undefined) {
     throw new Error(
-      `${displayPath(changelogPath(project))}: no ${LINKS_BEGIN} marker for the link of ${values.version}, add the BEGIN and END wlz:links markers where the link definitions go or set linkFormat to ""`,
+      `${displayPath(changelogPath(project))}: no ${LINKS_BEGIN} marker for the link definitions of ${values.version}, add the BEGIN and END wlz:links markers where the link definitions go`,
     );
   }
   return {
@@ -334,8 +376,9 @@ export async function planRelease(
     version,
     notes,
     section,
-    link,
-    content: insertRelease(document, section, link),
+    links,
+    references,
+    content: insertRelease(document, section, links),
     updates: await planReplacements(project.replacements, values),
     fragments,
   };

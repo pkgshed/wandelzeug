@@ -718,6 +718,79 @@ describe("command line", () => {
     });
   });
 
+  describe("references", () => {
+    const linkFields = [
+      "extraFields:",
+      "  - key: issue",
+      "    pattern: 'FOO-\\d{1,9}'",
+      '    url: "https://jira.corp.com/browse/{{issue}}"',
+      "  - key: pr",
+      "    type: int",
+      '    label: "#{{pr}}"',
+      '    url: "{{repositoryUrl}}/pull/{{pr}}"',
+    ].join("\n");
+
+    /** Has init set up a project whose issues and pull requests link. */
+    async function projectWithLinks(): Promise<void> {
+      await run("init", "--repository", "https://github.com/o/r");
+      await editConfig("extraFields: []", linkFields);
+      await editConfig(
+        'changeFormat: "{{body}}"',
+        'changeFormat: "{{marker}}{{#issue}}[{{issue}}] {{/issue}}{{text}}{{#pr}} ([#{{pr}}]){{/pr}}"',
+      );
+    }
+
+    const changelog = () => readFile(join(root, "CHANGELOG.md"), "utf8");
+
+    test("batch adds the definitions that the changelog lacks, and render keeps them", async () => {
+      await projectWithLinks();
+      await run("new", "-k", "Added", "-b", "* Thing", "-m", "issue=FOO-1234");
+      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1]", "-m", "pr=42");
+      await run("batch", "minor", "--date", "2026-11-17");
+      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1] and [FOO-9]");
+      await run("batch", "patch", "--date", "2026-11-18");
+
+      const text = await changelog();
+      expect(text).toContain("* [FOO-1234] Thing\n");
+      expect(text).toContain("* Fixes [FOO-1] ([#42])\n");
+      expect(text).toContain(
+        [
+          "<!-- BEGIN wlz:links -->",
+          "[`0.1.1`]: https://github.com/o/r/compare/v0.1.0...v0.1.1",
+          "[FOO-9]: https://jira.corp.com/browse/FOO-9",
+          "[`0.1.0`]: https://github.com/o/r/releases/tag/v0.1.0",
+          "[FOO-1234]: https://jira.corp.com/browse/FOO-1234",
+          "[FOO-1]: https://jira.corp.com/browse/FOO-1",
+          "[#42]: https://github.com/o/r/pull/42",
+          "<!-- END wlz:links -->",
+        ].join("\n"),
+      );
+
+      expect((await run("render")).exitCode).toBe(0);
+      expect(await changelog()).toBe(text);
+    });
+
+    test("show appends the definitions of its own references", async () => {
+      await projectWithLinks();
+      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1]", "-m", "pr=42");
+      await run("batch", "minor", "--date", "2026-11-17");
+
+      expect((await run("show", "0.1.0")).stdout).toBe(
+        [
+          "## [`0.1.0`] (2026-11-17)",
+          "",
+          "### Fixed",
+          "",
+          "* Fixes [FOO-1] ([#42])",
+          "",
+          "[FOO-1]: https://jira.corp.com/browse/FOO-1",
+          "[#42]: https://github.com/o/r/pull/42",
+          "",
+        ].join("\n"),
+      );
+    });
+  });
+
   describe("import", () => {
     const history = [
       "# Changelog",
@@ -901,6 +974,21 @@ describe("command line", () => {
         ].join("\n"),
       );
       expect(await gitOutput(root, "status", "--porcelain")).toBe("");
+    });
+
+    test("the tag message defines the references of the notes", async () => {
+      await projectWithFakeHelper();
+      await editConfig(
+        "extraFields: []",
+        "extraFields:\n  - key: issue\n    pattern: 'FOO-\\d+'\n    url: \"https://jira.corp.com/browse/{{issue}}\"",
+      );
+      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1]");
+      await commitAll(root, "link issues");
+
+      expect((await run("release", "auto")).exitCode).toBe(0);
+      expect(await readFile(messageCopy(), "utf8")).toEndWith(
+        "* Fixes [FOO-1]\n\n[FOO-1]: https://jira.corp.com/browse/FOO-1\n",
+      );
     });
 
     test("a helper that disagrees changes nothing", async () => {

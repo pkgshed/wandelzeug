@@ -83,8 +83,10 @@ titleMaxLength: ${DEFAULT_CONFIG.titleMaxLength}
 versionFormat: ${yamlString(DEFAULT_CONFIG.versionFormat)}
 # Heading of a kind section. Value: kind.
 kindFormat: ${yamlString(DEFAULT_CONFIG.kindFormat)}
-# One change entry. Values: body, kind, and any front matter key, as in
-# "{{body}}{{#pr}} (#{{pr}}){{/pr}}".
+# One change entry. A change whose body is a list has an entry per item.
+# Values: body, the item or the whole body; marker, the list marker such
+# as "* "; text, the item after its marker; kind; and any front matter key,
+# as in "{{body}}{{#pr}} (#{{pr}}){{/pr}}" or "{{marker}}[{{issue}}] {{text}}".
 changeFormat: ${yamlString(DEFAULT_CONFIG.changeFormat)}
 
 # The whole release. It places the three formats above as the partials
@@ -153,7 +155,8 @@ kinds:
 # kind. Each entry has a key, a prompt (default: the key), a type (default:
 # string), and whether it is required (default: false). The types are:
 #
-#   string  one line of text, limited by minLength and maxLength
+#   string  one line of text, limited by minLength and maxLength, and by
+#           pattern, a regular expression that the whole value must match
 #   block   several lines of text, limited by minLength and maxLength
 #   int     a whole number, limited by minInt and maxInt; "#42" counts as 42
 #   enum    one of enumOptions
@@ -170,6 +173,15 @@ kinds:
 #   - key: area
 #     type: enum
 #     enumOptions: [cli, docs, tests]
+#   - key: ticket
+#     pattern: 'FOO-\\d{1,9}'
+#     url: "https://jira.example.com/browse/{{ticket}}"
+#
+# Write a pattern in single quotes, because YAML reads a backslash in
+# double quotes as an escape. A string or int field with a url turns
+# references to its values, such as [FOO-1234], into links. Its label, a
+# template such as "#{{pr}}", sets how a reference looks, and defaults to
+# the value. A string field with a url needs a pattern.
 extraFields: []
 `;
 

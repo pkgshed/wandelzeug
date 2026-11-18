@@ -6,7 +6,7 @@
 
 import { join } from "node:path";
 import * as v from "valibot";
-import { findDuplicate } from "../shared/foundations.ts";
+import { attempt, findDuplicate } from "../shared/foundations.ts";
 import { isFieldName } from "../shared/templates.ts";
 import { BUMPS } from "../shared/versions.ts";
 
@@ -21,7 +21,7 @@ export const CHANGES_DIR = ".changes";
 export const CONFIG_FILE = join(CHANGES_DIR, "config.yaml");
 
 /** Keys that templates fill from the change itself, so metadata may not use them. */
-export const RESERVED_KEYS = ["kind", "title", "body"];
+export const RESERVED_KEYS = ["kind", "title", "body", "marker", "text"];
 
 /** The value types of an extra field, named as in changie's custom choices. */
 export const FIELD_TYPES = ["string", "block", "int", "enum", "enums"] as const;
@@ -202,19 +202,53 @@ const commonFieldEntries = {
   required: setting(v.boolean("must be true or false"), false),
 };
 
-const textField = <const Type extends "string" | "block">(
-  type: v.GenericSchema<Type | undefined, Type>,
-  name: Type,
-) =>
-  mapping(
-    {
-      ...commonFieldEntries,
-      type,
-      minLength: lengthLimit,
-      maxLength: lengthLimit,
-    },
-    ` for type ${name}`,
-  );
+/** Describes why a regular expression does not compile, if it does not. */
+function regExpProblem(source: string): string | undefined {
+  const compiled = attempt(() => new RegExp(source));
+  return compiled.ok ? undefined : compiled.error;
+}
+
+/** A regular expression in JavaScript syntax that a whole value must match. */
+const patternText = v.pipe(
+  v.string("must be a regular expression"),
+  v.nonEmpty("must be a non-empty regular expression"),
+  v.check(
+    (source) => regExpProblem(source) === undefined,
+    (issue) => regExpProblem(String(issue.input)) ?? "",
+  ),
+);
+
+/**
+ * The settings that make the values of a field links: the Mustache
+ * templates for the web address of a value and for the label that
+ * references the value in the notes, such as "#{{pr}}" for "[#42]".
+ */
+const linkEntries = {
+  url: absent(nonEmptyText),
+  label: absent(nonEmptyText),
+};
+
+const stringField = mapping(
+  {
+    ...commonFieldEntries,
+    type: v.optional(v.literal("string"), "string"),
+    minLength: lengthLimit,
+    maxLength: lengthLimit,
+    pattern: absent(patternText),
+    ...linkEntries,
+  },
+  " for type string",
+);
+
+const blockField = mapping(
+  {
+    ...commonFieldEntries,
+    type: v.literal("block"),
+    minLength: lengthLimit,
+    maxLength: lengthLimit,
+  },
+  " for type block",
+);
 
 const intField = mapping(
   {
@@ -222,6 +256,7 @@ const intField = mapping(
     type: v.literal("int"),
     minInt: absent(wholeNumber),
     maxInt: absent(wholeNumber),
+    ...linkEntries,
   },
   " for type int",
 );
@@ -273,13 +308,7 @@ const enumField = <const Type extends "enum" | "enums">(type: Type) =>
 /** The extra field settings by type. Without a type, a field holds a string. */
 const FieldSettingsSchema = v.variant(
   "type",
-  [
-    textField(v.optional(v.literal("string"), "string"), "string"),
-    textField(v.literal("block"), "block"),
-    intField,
-    enumField("enum"),
-    enumField("enums"),
-  ],
+  [stringField, blockField, intField, enumField("enum"), enumField("enums")],
   `must be one of: ${FIELD_TYPES.join(", ")}`,
 );
 
@@ -319,11 +348,33 @@ function invertedLimit(field: FieldSettings): string | undefined {
  * of the front matter, next to kind. Without a prompt, "new" asks with the
  * key itself.
  */
+/**
+ * Describes a link setting that cannot work, if there is one. A label is
+ * only for links, and wandelzeug finds the references of a string field in
+ * the notes through its pattern.
+ */
+function linkProblem(field: FieldSettings): string | undefined {
+  if (field.type !== "string" && field.type !== "int") return undefined;
+  if (field.label !== undefined && field.url === undefined) {
+    return "label needs url";
+  }
+  const lacksPattern =
+    field.type === "string" &&
+    field.url !== undefined &&
+    field.pattern === undefined;
+  return lacksPattern
+    ? "url needs a pattern, which finds the references in the notes"
+    : undefined;
+}
+
+const fieldProblem = (field: FieldSettings): string | undefined =>
+  invertedLimit(field) ?? linkProblem(field);
+
 const ExtraFieldSchema = v.pipe(
   FieldSettingsSchema,
   v.check(
-    (field) => invertedLimit(field) === undefined,
-    (issue) => invertedLimit(issue.input as FieldSettings) ?? "",
+    (field) => fieldProblem(field) === undefined,
+    (issue) => fieldProblem(issue.input as FieldSettings) ?? "",
   ),
   v.transform((field) => ({ ...field, prompt: field.prompt ?? field.key })),
 );

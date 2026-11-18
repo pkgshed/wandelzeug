@@ -100,9 +100,9 @@ describe("project workflow", () => {
     ].join("\n");
     expect(first.path).toBe(join(root, "CHANGELOG.md"));
     expect(first.section).toBe(firstSection);
-    expect(first.link).toBe(
+    expect(first.links).toEqual([
       "[`0.1.0`]: https://codeberg.org/o/r/releases/tag/v0.1.0",
-    );
+    ]);
     await writeRelease(first);
     await removeFragments(first.fragments);
     expect(await unreleasedFiles()).toEqual([".gitkeep"]);
@@ -158,6 +158,41 @@ describe("project workflow", () => {
       isoDate("2026-11-17"),
     );
     expect(plan.section).toContain("### Fixed\n\n* Crash (#7)\n* Hang\n");
+  });
+
+  test("the change format applies to each item of a list body", async () => {
+    await writeConfig(
+      root,
+      'changeFormat: "{{marker}}{{#issue}}[{{issue}}] {{/issue}}{{text}}"\n',
+    );
+    await writeChangelog(root);
+    const project = await loadProject(root);
+    await recordChange(
+      project,
+      change("Fixed", "* Crash on start\n* Hang on exit\n  for good", {
+        issue: "FOO-7",
+      }),
+    );
+    await recordChange(
+      project,
+      change("Fixed", "A paragraph instead of a list", { issue: "FOO-8" }),
+    );
+
+    const plan = await planRelease(
+      project,
+      releaseTarget("1.0.0"),
+      isoDate("2026-11-17"),
+    );
+    expect(plan.notes).toEndWith(
+      [
+        "### Fixed",
+        "",
+        "* [FOO-7] Crash on start",
+        "* [FOO-7] Hang on exit",
+        "  for good",
+        "[FOO-8] A paragraph instead of a list",
+      ].join("\n"),
+    );
   });
 
   test("a release template can replace the whole layout", async () => {

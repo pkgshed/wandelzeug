@@ -79,6 +79,8 @@ The output is the text between the release's markers, including its heading.
 linkFormat: "[`{{version}}`]: {{repositoryUrl}}/{{#previousTag}}compare/{{previousTag}}...{{tag}}{{/previousTag}}{{^previousTag}}releases/tag/{{tag}}{{/previousTag}}"
 ```
 
+The same markers hold the definitions of references to issues and pull requests, see [Link issues and pull requests](changes.md#link-issues-and-pull-requests). Each release brings its own link and the definitions of the references that it was the first to use, newest release first.
+
 The previous release is the highest earlier version in the changelog or its baseline, so a fix release such as 1.4.3 after 1.5.0 compares with 1.4.2. `{{tag}}` and `{{previousTag}}` carry the `tagPrefix`, which defaults to `v`, because git tags usually do, while release names carry the `versionPrefix`, which defaults to none.
 
 `init` takes `repositoryUrl` from the origin remote of the git repository, turned into an https address, and prints what it found. To choose it yourself, pass `--repository URL`. While `repositoryUrl` is empty, the default links stay off. To turn links off for good, set `linkFormat` to an empty string.
@@ -98,7 +100,7 @@ The following settings in `.changes/config.yaml` are templates:
 | `fragmentName` | `{{kind}}-{{title}}` | `title` (the first body line without its list marker), `kind`, and any front matter key. Every value becomes a lower-case slug, transliterated to ASCII where possible, such as `groesse-aendern` for "Größe ändern", and `titleMaxLength` limits the title. |
 | `versionFormat` | ``## [`{{version}}`] ({{date}})`` | `version`, `date`, `tag`, `previousVersion`, and `previousTag` |
 | `kindFormat` | `### {{kind}}` | `kind` |
-| `changeFormat` | `{{body}}` | `body`, `kind`, and any front matter key, such as `{{body}}{{#pr}} (#{{pr}}){{/pr}}` |
+| `changeFormat` | `{{body}}` | `body`, `marker`, `text`, `kind`, and any front matter key, such as `{{body}}{{#pr}} (#{{pr}}){{/pr}}` |
 | `releaseTemplate` | See the following example | The values of `versionFormat`, and `kinds`, where each kind has a `kind` and its `changes` |
 | `linkFormat` | See [Links](#links) | The values of `versionFormat`, and `repositoryUrl` |
 
@@ -116,6 +118,8 @@ releaseTemplate: |
   {{/changes}}
   {{/kinds}}
 ```
+
+`changeFormat` renders one entry for each item of a change whose body is a list. `body` is the item, `marker` its list marker, such as `* `, and `text` the item after its marker. So `{{marker}}{{#issue}}[{{issue}}] {{/issue}}{{text}}` puts the issue in front of every item, as in `* [FOO-1234] Added the thing.` A body that holds anything besides a list renders as one entry, with the whole body as `body` and `text` and an empty `marker`.
 
 To change a detail, such as a link after each change, edit a format. To change the layout, replace `releaseTemplate`. It can still place the formats, or it can write everything itself. wandelzeug rejects unknown values in `versionFormat` and `kindFormat`, partials outside `releaseTemplate`, and unknown partials, because Mustache would otherwise render them as empty without a trace.
 

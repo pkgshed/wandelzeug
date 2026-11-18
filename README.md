@@ -19,6 +19,7 @@ wandelzeug records each change as its own small Markdown file and turns the coll
 - **Keep a Changelog and Semantic Versioning out of the box:** releases come newest first, grouped by kind, with headings that link to the comparison with the previous release.
 - **Changelog entries enforced in CI:** `wlz check --since origin/main` fails a pull request without a change file and validates every entry.
 - **Extra fields:** a pull request number, an area, or any other field that `wlz new` asks for and `wlz check` validates.
+- **Links to issues and pull requests:** references such as `[FOO-1234]` or `[#42]` become links, whether they come from the front matter or the text of a change.
 - **Release in one step:** `wlz release auto` picks the next version from the kinds of the changes, writes the changelog, commits it, and tags the commit through [semverkzeug](https://github.com/0x5a17ed/semverkzeug).
 - **Version numbers in step:** the version in files such as `package.json` follows each release.
 - **Your layout:** Mustache templates shape the file names, the headings, the entries, and the whole release, and `wlz render` applies a changed template to past releases too.

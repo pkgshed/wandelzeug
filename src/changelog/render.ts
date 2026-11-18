@@ -25,10 +25,17 @@ import {
 import {
   inKindOrder,
   linksLackRepository,
+  type ReleaseValues,
   releaseValues,
   renderLink,
   renderRelease,
 } from "./releases.ts";
+import {
+  definitionLine,
+  findReferences,
+  normalizeLabel,
+  type Reference,
+} from "../changes/references.ts";
 
 /** A release with its data block. */
 type DataSection = ReleaseSection & { readonly data: ReleaseData };
@@ -86,12 +93,20 @@ const withConfiguredKinds = (
     kind: findKind(project.config.kinds, change.kind)?.label ?? change.kind,
   }));
 
+/** A release that rendered again from its data block. */
+type RenderedRelease = {
+  readonly section: DataSection;
+  readonly values: ReleaseValues;
+  readonly notes: string;
+  readonly replacement: LineReplacement;
+};
+
 /** Renders a release with data again, with a new hash for its new notes. */
 function renderSection(
   project: Project,
   section: DataSection,
   releases: readonly Release[],
-): LineReplacement {
+): RenderedRelease {
   const { data } = section;
   const values = releaseValues(
     project.config,
@@ -110,35 +125,63 @@ function renderSection(
     notes,
   );
   return {
-    start: section.begin,
-    end: section.end,
-    lines: rendered.split("\n"),
+    section,
+    values,
+    notes,
+    replacement: {
+      start: section.begin,
+      end: section.end,
+      lines: rendered.split("\n"),
+    },
   };
 }
 
 /**
- * Renders the link definitions of every marked release, newest first. It
- * needs the date of each release, so it only works when every release has
- * a data block. Without links, it empties the markers.
+ * Assigns each reference to the oldest release whose notes use it, as
+ * batch does when it adds only the definitions that the changelog lacks.
+ */
+function newReferences(
+  project: Project,
+  oldestFirst: readonly RenderedRelease[],
+): Reference[][] {
+  const used = oldestFirst.map((release) =>
+    findReferences(project, release.notes),
+  );
+  return used.map((references, index) => {
+    const earlier = new Set(
+      used
+        .slice(0, index)
+        .flat()
+        .map((reference) => normalizeLabel(reference.label)),
+    );
+    return references.filter(
+      (reference) => !earlier.has(normalizeLabel(reference.label)),
+    );
+  });
+}
+
+/**
+ * Renders the link definitions of every marked release, newest first:
+ * the link of each release, followed by the definitions of the references
+ * that it was the first to use. That is the order in which batch inserts
+ * them. Without links and references, it empties the markers.
  */
 function renderLinks(
   project: Project,
-  sections: readonly DataSection[],
-  releases: readonly Release[],
+  rendered: readonly RenderedRelease[],
 ): string[] {
-  const newestFirst = [...sections].sort((a, b) =>
-    compareVersions(b.version, a.version),
+  const oldestFirst = [...rendered].sort((a, b) =>
+    compareVersions(a.section.version, b.section.version),
   );
-  return newestFirst.flatMap((section) => {
-    const values = releaseValues(
-      project.config,
-      section.version,
-      section.data.date,
-      releases,
-    );
-    const link = renderLink(project, values);
-    return link === undefined ? [] : [link];
+  const references = newReferences(project, oldestFirst);
+  const blocks = oldestFirst.map((release, index) => {
+    const link = renderLink(project, release.values);
+    return [
+      ...(link === undefined ? [] : [link]),
+      ...(references[index] ?? []).map(definitionLine),
+    ];
   });
+  return blocks.reverse().flat();
 }
 
 /** What "wlz render" plans to write. */
@@ -236,16 +279,15 @@ export async function planRender(
 
   const withoutData = document.releases.length - sections.length;
   const keptLinks = linksKeptBecause(project, withoutData);
+  const rendered = sections.map((section) =>
+    renderSection(project, section, releases),
+  );
   const links =
     keptLinks === undefined
-      ? linksReplacement(
-          project,
-          document,
-          renderLinks(project, sections, releases),
-        )
+      ? linksReplacement(project, document, renderLinks(project, rendered))
       : [];
   const replacements = [
-    ...sections.map((section) => renderSection(project, section, releases)),
+    ...rendered.map((release) => release.replacement),
     ...links,
   ];
   return {

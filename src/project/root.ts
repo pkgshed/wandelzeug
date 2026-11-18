@@ -12,6 +12,7 @@ import {
   CONFIG_FILE,
   parseConfig,
 } from "./config.ts";
+import { labelRecognizer, type LinkField } from "../changes/references.ts";
 import { compilePattern, type Replacement } from "./replacements.ts";
 
 /** The parsed templates of a project. */
@@ -57,6 +58,8 @@ export type Project = {
   readonly config: Config;
   readonly templates: Templates;
   readonly replacements: readonly Replacement[];
+  /** The extra fields with a url, whose references in the notes become links. */
+  readonly linkFields: readonly LinkField[];
 };
 
 /**
@@ -157,6 +160,39 @@ function compileReplacements(root: string, config: Config): Replacement[] {
   });
 }
 
+/** The digits of an int value, as references write it, such as "42" in "[#42]". */
+const INT_VALUE_PATTERN = "\\d+";
+
+/**
+ * Compiles the link settings of an extra field. The label defaults to the
+ * value itself, and its url may also use repositoryUrl.
+ */
+function compileLinkField(
+  field: Config["extraFields"][number],
+  index: number,
+): LinkField[] {
+  if (field.type !== "string" && field.type !== "int") return [];
+  if (field.url === undefined) return [];
+
+  const setting = `extraFields[${index}]`;
+  const { key } = field;
+  const label = parseTemplateWithNames(
+    `${setting}.label`,
+    field.label ?? `{{${key}}}`,
+    [key],
+  );
+  const url = parseTemplateWithNames(`${setting}.url`, field.url, [
+    key,
+    "repositoryUrl",
+  ]);
+  const valuePattern =
+    field.type === "int" ? INT_VALUE_PATTERN : (field.pattern ?? "");
+  const recognizer = withContext(`${setting}.label`, () =>
+    labelRecognizer(label, key, valuePattern),
+  );
+  return [{ key, label, url, recognizer }];
+}
+
 /** Builds a project from its root directory and the parsed YAML configuration. */
 export function createProject(root: string, rawConfig: unknown): Project {
   const config = parseConfig(rawConfig);
@@ -165,6 +201,7 @@ export function createProject(root: string, rawConfig: unknown): Project {
     config,
     templates: compileTemplates(config),
     replacements: compileReplacements(root, config),
+    linkFields: config.extraFields.flatMap(compileLinkField),
   };
 }
 

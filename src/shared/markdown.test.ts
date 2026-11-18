@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { markdownBlocks } from "./markdown.ts";
+import { bracketedLabels, listItems, markdownBlocks } from "./markdown.ts";
 
 describe("markdown blocks", () => {
   test("blocks know their lines and keep the source of list items", () => {
@@ -47,5 +47,36 @@ describe("markdown blocks", () => {
     expect(markdownBlocks("\n\n# Title\n")).toEqual([
       { type: "heading", depth: 1, text: "Title", first: 2, last: 2 },
     ]);
+  });
+
+  test("listItems splits each top-level item into its marker and its text", () => {
+    expect(
+      listItems("* One\n  continued\n\n- Two\n  - nested\n\n10. Three"),
+    ).toEqual([
+      { marker: "* ", text: "One\n  continued", body: "* One\n  continued" },
+      { marker: "- ", text: "Two\n  - nested", body: "- Two\n  - nested" },
+      { marker: "10. ", text: "Three", body: "10. Three" },
+    ]);
+  });
+
+  test.each(["A paragraph", "* One\n\nA paragraph", "```\n* code\n```", ""])(
+    "listItems finds no items in %p",
+    (markdown) => {
+      expect(listItems(markdown)).toBeUndefined();
+    },
+  );
+
+  test("bracketedLabels finds labels outside code, links and escapes", () => {
+    const markdown = [
+      "## [`1.6.0`] (2026-11-17)",
+      "",
+      "* Fixes [FOO-1] and [FOO-2], not `[FOO-3]`, \\[FOO-4\\], or [FOO-5](https://x)",
+      "  - nested **[#42]**",
+      "",
+      "```",
+      "[FOO-7]",
+      "```",
+    ].join("\n");
+    expect(bracketedLabels(markdown)).toEqual(["FOO-1", "FOO-2", "#42"]);
   });
 });
