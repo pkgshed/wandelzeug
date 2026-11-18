@@ -1,0 +1,110 @@
+# The changelog
+
+This guide covers how wandelzeug finds its way around `CHANGELOG.md`, the links of releases, the templates that render a release, and how `wlz init` adopts an existing changelog.
+
+## Markers
+
+`CHANGELOG.md` is the only record of past releases. wandelzeug finds its way around the file through HTML comments, which Markdown viewers hide:
+
+```md
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+<!-- wlz:releases baseline=1.4.2 -->
+
+<!-- BEGIN wlz:release 1.6.0 -->
+## [`1.6.0`] (2026-11-17)
+
+### Added
+
+* Support for TOML config
+<!-- END wlz:release 1.6.0 -->
+
+<!-- BEGIN wlz:release 1.5.0 -->
+...
+<!-- END wlz:release 1.5.0 -->
+
+## 1.4.2 - 2025-03-02
+
+Older history from before wandelzeug.
+
+<!-- wlz:links -->
+[`1.6.0`]: https://codeberg.org/owner/repo/compare/v1.5.0...v1.6.0
+[`1.5.0`]: https://codeberg.org/owner/repo/compare/v1.4.2...v1.5.0
+```
+
+The anchor `<!-- wlz:releases -->` marks where releases go: `batch` inserts each new release directly below it, so the newest release comes first. Each release sits between `BEGIN` and `END` markers that name its version, which is how `latest`, `next`, and `show` find releases without parsing headings. `batch` only ever inserts, so you can fix a typo inside an older release by hand. The changelog changes only when you release, so branches don't conflict over it. The header above the anchor is yours, and `init` writes the one shown here into a new changelog.
+
+## Show the notes of a release
+
+To print the notes of one release, for example for the description of a release on GitHub, run the following command:
+
+```sh
+wlz show 1.6.0
+```
+
+The output is the text between the release's markers, including its heading.
+
+## Links
+
+`batch` also inserts a link definition for each release directly below the anchor `<!-- wlz:links -->`, which turns the version in the heading into a link. The default `linkFormat` compares the release with the previous one, the way [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) does, and links the tag of a first release:
+
+```yaml
+linkFormat: "[`{{version}}`]: {{repositoryUrl}}/{{#previousTag}}compare/{{previousTag}}...{{tag}}{{/previousTag}}{{^previousTag}}releases/tag/{{tag}}{{/previousTag}}"
+```
+
+The previous release is the highest earlier version in the changelog or its baseline, so a fix release such as 1.4.3 after 1.5.0 compares with 1.4.2. `{{tag}}` and `{{previousTag}}` carry the `tagPrefix`, which defaults to `v`, because git tags usually do, while release names carry the `versionPrefix`, which defaults to none.
+
+`init` takes `repositoryUrl` from the origin remote of the git repository, turned into an https address, and prints what it found. To choose it yourself, pass `--repository URL`. While `repositoryUrl` is empty, the default links stay off. To turn links off for good, set `linkFormat` to an empty string.
+
+## Keep a Changelog
+
+The default settings follow [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html): the six default kinds are its categories in its order, releases come newest first with an ISO 8601 date, and each version links to its comparison. The headings deliberately differ from its example: ``## [`1.1.2`] (2024-09-27)`` instead of `## [1.1.2] - 2024-09-27`, so the version stands out in a monospaced font. wandelzeug keeps unreleased changes as files in `.changes/unreleased/`, so it doesn't maintain an `## [Unreleased]` section.
+
+## Templates
+
+Templates use [Mustache](https://mustache.github.io/mustache.5.html) without HTML escaping, so Markdown such as `&` or `` ` `` passes through unchanged. `{{name}}` inserts a value, and a section such as `{{#pr}}...{{/pr}}` renders only when the value is set. A missing value renders empty. For example, `{{#pr}}{{pr}}-{{/pr}}{{kind}}-{{title}}` yields `001-42-added-support-for-toml-config.md` with a `pr` value and `001-added-support-for-toml-config.md` without one. A boolean front matter entry works as a switch, as in `{{#breaking}}**Breaking:** {{/breaking}}`.
+
+The following settings in `.changes/config.yaml` are templates:
+
+| Setting | Default | Values |
+|---------|---------|--------|
+| `fragmentName` | `{{kind}}-{{title}}` | `title` (the first body line without its list marker), `kind`, and any front matter key. Every value becomes a lower-case slug, transliterated to ASCII where possible, such as `groesse-aendern` for "Größe ändern", and `titleMaxLength` limits the title. |
+| `versionFormat` | ``## [`{{version}}`] ({{date}})`` | `version`, `date`, `tag`, `previousVersion`, and `previousTag` |
+| `kindFormat` | `### {{kind}}` | `kind` |
+| `changeFormat` | `{{body}}` | `body`, `kind`, and any front matter key, such as `{{body}}{{#pr}} (#{{pr}}){{/pr}}` |
+| `releaseTemplate` | See the following example | The values of `versionFormat`, and `kinds`, where each kind has a `kind` and its `changes` |
+| `linkFormat` | See [Links](#links) | The values of `versionFormat`, and `repositoryUrl` |
+
+`releaseTemplate` renders a whole release. By default, it places the three formats as the partials `{{> version}}`, `{{> kind}}`, and `{{> change}}`, each as whole lines:
+
+```yaml
+releaseTemplate: |
+  {{> version}}
+  {{#kinds}}
+
+  {{> kind}}
+
+  {{#changes}}
+  {{> change}}
+  {{/changes}}
+  {{/kinds}}
+```
+
+To change a detail, such as a link after each change, edit a format. To change the layout, replace `releaseTemplate`. It can still place the formats, or it can write everything itself. wandelzeug rejects unknown values in `versionFormat` and `kindFormat`, partials outside `releaseTemplate`, and unknown partials, because Mustache would otherwise render them as empty without a trace.
+
+The file that `init` writes explains every other setting, including the paths and the list of kinds.
+
+## Onboard an existing changelog
+
+When a `CHANGELOG.md` exists already, `init` only adds the two anchors and keeps every other line, including your header:
+
+- The release anchor goes above the first heading that names a version, such as `## 1.4.2` or `## [1.4.2] - 2025-03-02`. In a [Keep a Changelog](https://keepachangelog.com) file, an `## [Unreleased]` section stays above it.
+- The newest stable version among those headings becomes the `baseline`, which `latest` and `next` use until wandelzeug records its first release. To choose the baseline yourself, pass `--baseline VERSION`.
+- The links anchor goes above the first link definition that names a version, so an `[unreleased]: ...` definition stays above it.
+- Without such a heading or definition, the anchor goes to the end of the file.
+
+`init` prints the lines of the anchors and the baseline. They are plain text, so if a guess is wrong, move an anchor line or edit the baseline by hand.
