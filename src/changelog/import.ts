@@ -30,6 +30,7 @@ import {
   type ReleaseSection,
   replaceLines,
 } from "./markers.ts";
+import { inKindOrder } from "./releases.ts";
 
 type HeadingBlock = Extract<MarkdownBlock, { type: "heading" }>;
 type DefinitionBlock = Extract<MarkdownBlock, { type: "definition" }>;
@@ -130,7 +131,8 @@ function readRelease(
     return misfit("its heading names no date as YYYY-MM-DD");
   }
   const changes = readChanges(blocks, kinds);
-  return changes.fits ? fit({ date, changes: changes.value }) : changes;
+  if (!changes.fits) return changes;
+  return fit({ date, changes: inKindOrder(changes.value, kinds) });
 }
 
 // --- Releases that might get a data block -------------------------------------

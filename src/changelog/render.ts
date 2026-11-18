@@ -23,6 +23,7 @@ import {
   replaceLines,
 } from "./markers.ts";
 import {
+  inKindOrder,
   linksLackRepository,
   releaseValues,
   renderLink,
@@ -98,7 +99,10 @@ function renderSection(
     data.date,
     releases,
   );
-  const changes = withConfiguredKinds(project, data.changes);
+  const changes = inKindOrder(
+    withConfiguredKinds(project, data.changes),
+    project.config.kinds,
+  );
   const notes = renderRelease(project, values, changes);
   const rendered = releaseSection(
     values.version,

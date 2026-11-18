@@ -91,6 +91,24 @@ describe("import", () => {
     expect(currentNotes(document, oldest!)).toBe(release100.join("\n"));
   });
 
+  test("the data block groups kinds in the configured order", () => {
+    const fixedFirst = [
+      "## [1.2.0] - 2025-04-01",
+      "",
+      "### Fixed",
+      "",
+      "- Crash",
+      "",
+      "### Added",
+      "",
+      "- Feature",
+    ];
+    const plan = imported(onboarded(fixedFirst));
+    expect(plan.content).toContain(
+      'changes:\n  Added:\n    - body: "- Feature"\n  Fixed:\n    - body: "- Crash"\n',
+    );
+  });
+
   test("the link definitions of imported releases move inside the markers", () => {
     const plan = imported(onboarded(release120, release100));
     expect(plan.movedLinks).toBe(2);

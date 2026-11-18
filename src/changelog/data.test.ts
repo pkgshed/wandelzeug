@@ -45,39 +45,68 @@ describe("release data", () => {
     expect(text).toContain('note: "a -\\x2D> b"');
   });
 
-  test("a data block writes changes like change files", () => {
+  test("a data block groups the changes by kind, in the order of their first change", () => {
     expect(
       formatReleaseData({
         ...data,
-        changes: [{ kind: "Added", metadata: { pr: 7 }, body: "* One\n* Two" }],
+        changes: [
+          { kind: "Added", metadata: { pr: 7 }, body: "* One\n* Two" },
+          { kind: "Fixed", metadata: {}, body: "* Crash" },
+          { kind: "Added", metadata: {}, body: "* Three" },
+        ],
       }),
     ).toEqual([
       "date: 2026-11-17",
       `hash: ${data.hash}`,
       "changes:",
-      "  - kind: Added",
-      "    pr: 7",
-      "    body: |-",
-      "      * One",
-      "      * Two",
+      "  Added:",
+      "    - pr: 7",
+      "      body: |-",
+      "        * One",
+      "        * Two",
+      '    - body: "* Three"',
+      "  Fixed:",
+      '    - body: "* Crash"',
     ]);
   });
 
+  test("a kind that holds --> stays inside the comment", () => {
+    const text = formatReleaseData({
+      ...data,
+      changes: [{ kind: "A --> B", metadata: {}, body: "* x" }],
+    }).join("\n");
+    expect(text).toContain('  "A -\\x2D> B":');
+    expect(parseReleaseData(text).changes[0]?.kind).toBe("A --> B");
+  });
+
+  const header = `date: 2026-11-17\nhash: ${notesHash("x")}`;
   test.each([
     ["- a list", "the data block must be a mapping"],
     ["date: 2026-11-17\nauthor: me", 'unknown data block key "author"'],
     [`date: 2026-13-01\nhash: ${notesHash("x")}`, "date must be a date"],
     [
-      `date: 2026-11-17\nhash: ${notesHash("x")}\nchanges: {}`,
-      "changes must be a non-empty list",
+      `${header}\nchanges: {}`,
+      "changes must map each kind to a list of changes",
     ],
     [
-      `date: 2026-11-17\nhash: ${notesHash("x")}\nchanges:\n  - body: "* Fix"`,
-      "changes[0]: kind is missing",
+      `${header}\nchanges:\n  - body: "* Fix"`,
+      "changes must map each kind to a list of changes",
     ],
     [
-      `date: 2026-11-17\nhash: ${notesHash("x")}\nchanges:\n  - kind: Fixed\n    body: "* "`,
-      "changes[0]: body is empty",
+      `${header}\nchanges:\n  Fixed: []`,
+      "changes.Fixed must be a non-empty list",
+    ],
+    [
+      `${header}\nchanges:\n  Fixed:\n    - pr: 1`,
+      "changes.Fixed[0]: body is missing",
+    ],
+    [
+      `${header}\nchanges:\n  Fixed:\n    - body: "* "`,
+      "changes.Fixed[0]: body is empty",
+    ],
+    [
+      `${header}\nchanges:\n  Fixed:\n    - kind: Added\n      body: "* x"`,
+      "changes.Fixed[0]: kind comes from the group that holds the change",
     ],
   ])("parseReleaseData rejects %p with %p", (yaml, message) => {
     expect(() => parseReleaseData(yaml)).toThrow(message);

@@ -25,9 +25,9 @@ export type ReleaseData = {
   /** The hash of the notes as wandelzeug rendered them last. */
   readonly hash: NotesHash;
   /**
-   * The changes in the order of their change files. Their kinds stay as
-   * recorded, so a kind that left the configuration shows up when the
-   * release renders instead of vanishing.
+   * The changes, which the data block groups by kind in the order that
+   * they come here. Their kinds stay as recorded, so a kind that left the
+   * configuration shows up when the release renders instead of vanishing.
    */
   readonly changes: readonly Change[];
 };
@@ -60,10 +60,15 @@ function dataEntry(key: string, value: MetadataValue): string {
   return `${Bun.YAML.stringify(key)}: ${escaped}`;
 }
 
-/** Formats a change as an item of the changes list. */
+/** Formats a kind as a key of the changes, with the same care for comment ends as dataEntry. */
+function kindKey(kind: string): string {
+  if (!COMMENT_END.test(kind)) return Bun.YAML.stringify(kind);
+  return JSON.stringify(kind).replace(/--(?=!?>)/g, "-\\x2D");
+}
+
+/** Formats a change as an item of the list below its kind: its metadata, then its body. */
 function changeItem(change: Change): string[] {
   const entries = [
-    dataEntry("kind", change.kind),
     ...Object.entries(change.metadata).map(([key, value]) =>
       dataEntry(key, value),
     ),
@@ -73,9 +78,20 @@ function changeItem(change: Change): string[] {
     .join("\n")
     .split("\n")
     .map((line, index) => {
-      if (index === 0) return `  - ${line}`;
-      return line === "" ? "" : `    ${line}`;
+      if (index === 0) return `    - ${line}`;
+      return line === "" ? "" : `      ${line}`;
     });
+}
+
+/** Groups changes by kind, with the kinds in the order of their first change. */
+function groupByKind(
+  changes: readonly Change[],
+): (readonly [string, readonly Change[]])[] {
+  const kinds = [...new Set(changes.map((change) => change.kind))];
+  return kinds.map((kind) => [
+    kind,
+    changes.filter((change) => change.kind === kind),
+  ]);
 }
 
 /** Formats the lines of a data block, without the comment around it. */
@@ -83,7 +99,10 @@ export const formatReleaseData = (data: ReleaseData): string[] => [
   dataEntry("date", data.date),
   dataEntry("hash", data.hash),
   "changes:",
-  ...data.changes.flatMap(changeItem),
+  ...groupByKind(data.changes).flatMap(([kind, changes]) => [
+    `  ${kindKey(kind)}:`,
+    ...changes.flatMap(changeItem),
+  ]),
 ];
 
 const DATA_KEYS = ["date", "hash", "changes"];
@@ -104,23 +123,37 @@ function parseDataHash(value: unknown): NotesHash {
   return value as NotesHash;
 }
 
-function parseDataChange(value: unknown): Change {
+function parseDataChange(kind: string, value: unknown): Change {
   if (!isRecord(value)) {
     throw new Error("must be a mapping");
   }
   const { body, ...fields } = value;
+  if ("kind" in fields) {
+    throw new Error("kind comes from the group that holds the change");
+  }
   if (typeof body !== "string") {
     throw new Error("body is missing");
   }
-  return changeFromFields(fields, body);
+  return changeFromFields({ kind, ...fields }, body);
 }
 
-function parseDataChanges(value: unknown): Change[] {
+function parseKindGroup(kind: string, value: unknown): Change[] {
   if (!Array.isArray(value) || value.length === 0) {
-    throw new Error("changes must be a non-empty list");
+    throw new Error(`changes.${kind} must be a non-empty list`);
   }
   return value.map((item: unknown, index) =>
-    withContext(`changes[${index}]`, () => parseDataChange(item)),
+    withContext(`changes.${kind}[${index}]`, () => parseDataChange(kind, item)),
+  );
+}
+
+/** Parses the changes, which the data block groups by kind, into one list. */
+function parseDataChanges(value: unknown): Change[] {
+  const isGroups = isRecord(value) && Object.keys(value).length > 0;
+  if (!isGroups) {
+    throw new Error("changes must map each kind to a list of changes");
+  }
+  return Object.entries(value).flatMap(([kind, group]) =>
+    parseKindGroup(kind, group),
   );
 }
 

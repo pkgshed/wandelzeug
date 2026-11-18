@@ -240,15 +240,32 @@ function rejectExistingRelease(
   }
 }
 
+/**
+ * Orders changes by the configured order of their kinds, and keeps the
+ * order within each kind, as the notes have them. Kinds that the
+ * configuration lacks come last.
+ */
+export function inKindOrder(
+  changes: readonly Change[],
+  kinds: readonly Kind[],
+): Change[] {
+  const rank = (change: Change): number => {
+    const kind = findKind(kinds, change.kind);
+    return kind === undefined ? kinds.length : kinds.indexOf(kind);
+  };
+  return [...changes].sort((a, b) => rank(a) - rank(b));
+}
+
 /** The data block of a new release: its date, its changes without their files, and the hash of its notes. */
 const releaseData = (
   date: IsoDate,
   changes: readonly Change[],
+  kinds: readonly Kind[],
   notes: string,
 ): ReleaseData => ({
   date,
   hash: notesHash(notes),
-  changes: changes.map(({ kind, metadata, body }) => ({
+  changes: inKindOrder(changes, kinds).map(({ kind, metadata, body }) => ({
     kind,
     metadata,
     body,
@@ -303,7 +320,7 @@ export async function planRelease(
   const values = releaseValues(project.config, version, date, releases);
   const notes = renderRelease(project, values, fragments);
   const data = project.config.releaseData
-    ? releaseData(date, fragments, notes)
+    ? releaseData(date, fragments, project.config.kinds, notes)
     : undefined;
   const section = releaseSection(values.version, data, notes);
   const link = renderLink(project, values);

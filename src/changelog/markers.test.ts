@@ -265,11 +265,12 @@ describe("changelog markers", () => {
           "date: 2026-11-17",
           `hash: ${hash}`,
           "changes:",
-          "  - kind: Added",
+          "  Added:",
+          "    - pr: 1",
           "-->",
           end("1.0.0"),
         ],
-        "line 3: release 1.0.0: changes[0]: body is missing",
+        "line 3: release 1.0.0: changes.Added[0]: body is missing",
       ],
       [
         [
