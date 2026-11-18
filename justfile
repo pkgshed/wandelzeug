@@ -26,3 +26,11 @@ build:
 # Format every file that Prettier covers.
 format:
     bun run prettier --write .
+
+# Prepare the assets of the GitHub release of a tag in dist/release.
+release-assets tag: build
+    scripts/release-assets.sh "{{tag}}"
+
+# Rehearse a release in a copy of this checkout, which leaves the repository as it is.
+rehearse-release:
+    scripts/rehearse-release.sh
