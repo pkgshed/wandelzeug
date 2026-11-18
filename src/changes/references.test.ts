@@ -51,6 +51,31 @@ describe("references", () => {
     ]);
   });
 
+  test("GitLab merge requests and issues differ by their prefix", () => {
+    const gitlab = projectWith({
+      repositoryUrl: "https://gitlab.com/o/r",
+      extraFields: [
+        {
+          key: "mr",
+          type: "int",
+          label: "!{{mr}}",
+          url: "{{repositoryUrl}}/-/merge_requests/{{mr}}",
+        },
+        {
+          key: "issue",
+          type: "int",
+          label: "#{{issue}}",
+          url: "{{repositoryUrl}}/-/issues/{{issue}}",
+        },
+      ],
+    });
+    const notes = "* Fixes [#7] in [!42], not ![!43](logo.png) or `[#8]`";
+    expect(findReferences(gitlab, notes)).toEqual([
+      { label: "#7", url: "https://gitlab.com/o/r/-/issues/7" },
+      { label: "!42", url: "https://gitlab.com/o/r/-/merge_requests/42" },
+    ]);
+  });
+
   test("a field without a url makes no references", () => {
     const plain = projectWith({
       extraFields: [{ key: "issue", pattern: "FOO-\\d+" }],
