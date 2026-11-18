@@ -145,7 +145,7 @@ type Candidate = {
   readonly convert: () => Fit<LineReplacement>;
 };
 
-/** Gives a marked release without a data block one, right before its END marker. */
+/** Gives a marked release without a data block one, right before its END marker and after a blank line. */
 function convertMarked(
   document: ChangelogDocument,
   section: ReleaseSection,
@@ -169,10 +169,14 @@ function convertMarked(
   const content = readRelease(heading, blocks, kinds);
   if (!content.fits) return misfit(content.reason);
   const hash = notesHash(currentNotes(document, section));
+  const endsBlank = document.lines[section.end - 1]?.trim() === "";
   return fit({
     start: section.end,
     end: section.end - 1,
-    lines: dataComment({ ...content.value, hash }),
+    lines: [
+      ...(endsBlank ? [] : [""]),
+      ...dataComment({ ...content.value, hash }),
+    ],
   });
 }
 
@@ -285,6 +289,7 @@ function convertLegacy(
     lines: [
       beginMarker(release.name),
       ...notes,
+      "",
       ...dataComment({ ...content.value, hash }),
       endMarker(release.name),
     ],

@@ -87,6 +87,7 @@ describe("project workflow", () => {
     const firstSection = [
       "<!-- BEGIN wlz:release 0.1.0 -->",
       firstNotes,
+      "",
       "<!-- wlz:data",
       "date: 2026-11-17",
       `hash: ${notesHash(firstNotes)}`,
@@ -127,6 +128,7 @@ describe("project workflow", () => {
         "",
         "<!-- BEGIN wlz:release 0.1.1 -->",
         secondNotes,
+        "",
         "<!-- wlz:data",
         "date: 2026-11-18",
         `hash: ${notesHash(secondNotes)}`,

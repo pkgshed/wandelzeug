@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 * `wlz latest`, `wlz next` and `wlz show` print the latest release, the version that a bump yields, and the notes of a release.
 * Replacements keep version numbers in other files, such as `package.json`, in step with each release.
 * `wlz --version` prints the installed version.
+
 <!-- wlz:data
 date: 2026-11-17
 hash: h1:UAxOg0Sxvm8H/rtQ2CMAdA==

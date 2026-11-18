@@ -94,7 +94,8 @@ export const dataComment = (data: ReleaseData): string[] => [
 /**
  * Formats a release as batch inserts it: the BEGIN marker, the notes, the
  * data block if there is one, and the END marker. The data block comes
- * last, so a reader of the file meets the notes first.
+ * last, so a reader of the file meets the notes first, and a blank line
+ * sets it apart from the notes.
  */
 export const releaseSection = (
   name: string,
@@ -104,7 +105,7 @@ export const releaseSection = (
   [
     beginMarker(name),
     notes,
-    ...(data === undefined ? [] : dataComment(data)),
+    ...(data === undefined ? [] : ["", ...dataComment(data)]),
     endMarker(name),
   ].join("\n");
 

@@ -211,6 +211,7 @@ describe("command line", () => {
         "### Added",
         "",
         "* Feature",
+        "",
         "<!-- wlz:data",
         "date: 2026-11-17",
         `hash: ${notesHash("## [`0.1.0`] (2026-11-17)\n\n### Added\n\n* Feature")}`,
@@ -664,7 +665,7 @@ describe("command line", () => {
       await editConfig("releaseData: false", "releaseData: true");
       expect((await run("import")).stdout).toBe("imported 1 release: 0.1.0\n");
       expect(await changelog()).toContain(
-        "* Feature\n<!-- wlz:data\ndate: 2026-11-17\n",
+        "* Feature\n\n<!-- wlz:data\ndate: 2026-11-17\n",
       );
       expect((await run("check")).exitCode).toBe(0);
     });

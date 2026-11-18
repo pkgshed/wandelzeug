@@ -190,8 +190,8 @@ describe("changelog markers", () => {
       expect(section).toMatchObject({
         name: "1.0.0",
         begin: 2,
-        notesEnd: 8,
-        end: 16,
+        notesEnd: 9,
+        end: 17,
       });
       expect(section?.data).toEqual(data);
     });

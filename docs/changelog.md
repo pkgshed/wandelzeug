@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 * Support for TOML config
+
 <!-- wlz:data
 date: 2026-11-17
 hash: h1:wohGM1AA3aJY2u5jLXV2KA==

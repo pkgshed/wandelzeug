@@ -184,6 +184,25 @@ describe("import", () => {
     expect(currentNotes(document, section!)).toBe(notes.join("\n"));
   });
 
+  test("a data block follows the notes after exactly one blank line", () => {
+    const notes = [
+      "## [`0.1.0`] (2026-11-17)",
+      "",
+      "### Added",
+      "",
+      "* Feature",
+    ];
+    for (const ending of [[], [""]]) {
+      const plan = imported([
+        anchorMarker(undefined),
+        "",
+        ...marked("0.1.0", [...notes, ...ending]),
+        "",
+      ]);
+      expect(plan.content).toContain("* Feature\n\n<!-- wlz:data\n");
+    }
+  });
+
   test("a marked release that does not fit stops before the older releases", () => {
     const plan = imported([
       anchorMarker("1.2.0"),
