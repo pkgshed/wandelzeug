@@ -17,7 +17,7 @@ import {
 import { isRecord, withContext } from "../shared/foundations.ts";
 import { type IsoDate, parseIsoDate } from "../shared/versions.ts";
 
-/** A hash of rendered notes, such as "h1:LXEWQrcmsEQBYnyp+6wy9Q==". */
+/** A hash of rendered notes, such as "h1:LXEWQrcmsEQBYnyp+6wy9Q". */
 export type NotesHash = string & { readonly __brand: "NotesHash" };
 
 /** What a release needs to render again. */
@@ -35,16 +35,19 @@ export type ReleaseData = {
 
 /**
  * Hashes rendered notes: "h1:" and the base64 of the first 128 bits of
- * their SHA-256. The notes count without surrounding blank lines and with
- * "\n" line breaks, so the line breaks of the file do not matter.
+ * their SHA-256, without the "==" padding, which is the same for every
+ * hash of that length. The notes count without surrounding blank lines and
+ * with "\n" line breaks, so the line breaks of the file do not matter.
  */
 export function notesHash(notes: string): NotesHash {
   const text = notes.replace(/\r\n/g, "\n").trim();
   const digest = createHash("sha256").update(text).digest();
-  return `h1:${digest.subarray(0, 16).toString("base64")}` as NotesHash;
+  const encoded = digest.subarray(0, 16).toString("base64");
+  return `h1:${encoded.replace(/=+$/, "")}` as NotesHash;
 }
 
-const NOTES_HASH = /^h1:[A-Za-z0-9+/]{22}==$/;
+/** A hash with or without the padding, which wandelzeug wrote up to version 0.2.1. */
+const NOTES_HASH = /^(h1:[A-Za-z0-9+/]{22})(?:==)?$/;
 
 /** Text that would end the HTML comment around the data block. */
 const COMMENT_END = /--!?>/;
@@ -143,14 +146,15 @@ function parseDataDate(value: string | undefined): IsoDate {
   return date;
 }
 
+/** Parses a hash into the form that notesHash returns, without the padding. */
 function parseDataHash(value: string | undefined): NotesHash {
-  const isHash = value !== undefined && NOTES_HASH.test(value);
-  if (!isHash) {
+  const hash = value === undefined ? undefined : NOTES_HASH.exec(value)?.[1];
+  if (hash === undefined) {
     throw new Error(
-      'the data block needs hash= with "h1:" and 24 characters of base64',
+      'the data block needs hash= with "h1:" and 22 characters of base64',
     );
   }
-  return value as NotesHash;
+  return hash as NotesHash;
 }
 
 function parseDataChange(kind: string, value: unknown): Change {
