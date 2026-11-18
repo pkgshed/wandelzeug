@@ -122,6 +122,37 @@ describe("command line", () => {
     expect(coloured.stdout).toContain("\x1b[36mDATE\x1b[0m");
   });
 
+  test("completion prints a script that registers wlz", async () => {
+    const result = await run("completion", "bash");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("complete -o filenames -F _wlz -- wlz");
+  });
+
+  /** Asks for the suggestions that the bash script shows for the given words. */
+  async function suggestions(...words: string[]): Promise<string[]> {
+    const result = await run("completion", "bash", ...words);
+    return result.stdout.split("\n").filter((line) => line !== "");
+  }
+
+  test.each([
+    [["re"], ["release"]],
+    [
+      ["release", "m"],
+      ["major", "minor"],
+    ],
+    [["batch", "p"], ["patch"]],
+    [["new", "--k"], ["--kind"]],
+    [["new", "--edit", "--r"], []],
+  ])("completing %p suggests %p", async (words, expected) => {
+    expect(await suggestions(...words)).toEqual(expected);
+  });
+
+  test("completing -C asks the shell for directories", async () => {
+    expect(await suggestions("new", "-C", "sr")).toEqual([
+      "__FILE__:directory::sr:0",
+    ]);
+  });
+
   test("no command is a usage error", async () => {
     expect(await run()).toMatchObject({
       exitCode: 2,
