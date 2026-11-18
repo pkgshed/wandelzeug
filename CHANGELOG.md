@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 <!-- wlz:releases -->
 
+<!-- BEGIN wlz:release 0.2.1 -->
+## [`0.2.1`] (2026-11-18)
+
+### Fixed
+
+* `wlz show` also ends with the link definition of the release itself, so the version in the heading of a GitHub release description links to its comparison.
+
+<!-- wlz:data date=2026-11-18 hash=h1:X7IlqXywNOaCw/OSmJTSoQ==
+Fixed:
+  - body: "* `wlz show` also ends with the link definition of the release itself, so the version in the heading of a GitHub release description links to its comparison."
+-->
+<!-- END wlz:release 0.2.1 -->
+
 <!-- BEGIN wlz:release 0.2.0 -->
 ## [`0.2.0`] (2026-11-18)
 
@@ -75,6 +88,7 @@ Added:
 <!-- END wlz:release 0.1.0 -->
 
 <!-- BEGIN wlz:links -->
+[`0.2.1`]: https://github.com/pkgshed/wandelzeug/compare/v0.2.0...v0.2.1
 [`0.2.0`]: https://github.com/pkgshed/wandelzeug/compare/v0.1.0...v0.2.0
 [`0.1.0`]: https://github.com/pkgshed/wandelzeug/releases/tag/v0.1.0
 <!-- END wlz:links -->
