@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 <!-- wlz:releases -->
 
+<!-- BEGIN wlz:release 0.3.0 -->
+## [`0.3.0`] (2026-11-18)
+
+### Changed
+
+* Data blocks write their hash without the `==` padding, as `hash=h1:` and 22 characters. Hashes with the padding stay valid, and `wlz render` shortens them. wlz 0.2.1 and older cannot read the short form.
+
+<!-- wlz:data date=2026-11-18 hash=h1:ga5Lje/UlWxiVFC9wzlM2g
+Changed:
+  - body: "* Data blocks write their hash without the `==` padding, as `hash=h1:` and 22 characters. Hashes with the padding stay valid, and `wlz render` shortens them. wlz 0.2.1 and older cannot read the short form."
+-->
+<!-- END wlz:release 0.3.0 -->
+
 <!-- BEGIN wlz:release 0.2.1 -->
 ## [`0.2.1`] (2026-11-18)
 
@@ -88,6 +101,7 @@ Added:
 <!-- END wlz:release 0.1.0 -->
 
 <!-- BEGIN wlz:links -->
+[`0.3.0`]: https://github.com/pkgshed/wandelzeug/compare/v0.2.1...v0.3.0
 [`0.2.1`]: https://github.com/pkgshed/wandelzeug/compare/v0.2.0...v0.2.1
 [`0.2.0`]: https://github.com/pkgshed/wandelzeug/compare/v0.1.0...v0.2.0
 [`0.1.0`]: https://github.com/pkgshed/wandelzeug/releases/tag/v0.1.0
