@@ -104,6 +104,25 @@ releaseTemplate: |
   {{/changes}}
   {{/kinds}}
 
+# The message of the tag that "wlz release" creates. Git hosts show tag
+# messages as plain text, so it starts with a subject line and lists the
+# kinds without Markdown headings. Values: those of releaseTemplate, and
+# references, which hold the label and the url of each reference in the
+# notes. Blank lines at the end disappear.
+tagTemplate: |
+  release {{tag}}
+  {{#kinds}}
+
+  {{kind}}:
+  {{#changes}}
+  {{> change}}
+  {{/changes}}
+  {{/kinds}}
+
+  {{#references}}
+  [{{label}}]: <{{url}}>
+  {{/references}}
+
 # Link definition of a release, below the <!-- BEGIN wlz:links --> marker. It
 # compares the tag with the previous tag, or links the tag of a first
 # release. Values: those of versionFormat and repositoryUrl. An empty

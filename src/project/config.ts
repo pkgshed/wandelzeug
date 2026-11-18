@@ -42,6 +42,26 @@ export const DEFAULT_RELEASE_TEMPLATE = `{{> version}}
 `;
 
 /**
+ * The tag message of a release as plain text, because git hosts show tag
+ * messages without rendering Markdown: a subject line, the changes below a
+ * line for each kind, and the definitions of the references with their
+ * web addresses in angle brackets.
+ */
+export const DEFAULT_TAG_TEMPLATE = `release {{tag}}
+{{#kinds}}
+
+{{kind}}:
+{{#changes}}
+{{> change}}
+{{/changes}}
+{{/kinds}}
+
+{{#references}}
+[{{label}}]: <{{url}}>
+{{/references}}
+`;
+
+/**
  * The link definition of a release in the style of Keep a Changelog: a
  * comparison with the previous tag, or the tag itself for a first release.
  */
@@ -446,6 +466,8 @@ const ConfigSchema = v.pipe(
     changeFormat: setting(text, "{{body}}"),
     /** Mustache template for a whole release, which places the formats as partials. */
     releaseTemplate: setting(text, DEFAULT_RELEASE_TEMPLATE),
+    /** Mustache template for the message of the tag that "wlz release" creates. */
+    tagTemplate: setting(text, DEFAULT_TAG_TEMPLATE),
     /** Mustache template for the link definition of a release. Empty turns links off. */
     linkFormat: setting(text, DEFAULT_LINK_FORMAT),
     /**

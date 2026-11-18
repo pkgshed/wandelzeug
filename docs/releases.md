@@ -1,6 +1,6 @@
 # Releases
 
-This guide covers how wandelzeug picks versions, how `wlz release` commits and tags a release, how version numbers in other files stay in step, and how projects in a monorepo work.
+This guide covers how wandelzeug picks versions, how `wlz release` commits and tags a release, the tag messages, how version numbers in other files stay in step, and how projects in a monorepo work.
 
 ## Versions
 
@@ -24,13 +24,44 @@ wlz release auto
 
 1. It asks semverkzeug for a dry run of the bump with the version that the changelog expects. semverkzeug also checks that the working tree is clean. When the tag history and the changelog disagree, `release` stops before it changes anything.
 2. It adds the release to the changelog, updates the files of the [replacements](#update-version-numbers-in-other-files), removes the change files, and commits all of them as `release 1.2.0`.
-3. It has semverkzeug tag that commit, with the release notes as the tag message.
+3. It has semverkzeug tag that commit, with a message that `tagTemplate` renders, see [Tag messages](#tag-messages).
 
 To check a release without changing anything, pass `--dry-run`. If tagging fails after the commit, for example because signing fails, the error names the untagged commit and the command to tag it.
 
 `release` needs semverkzeug 0.8.0 or later, whose `bump` command has the options `--expect`, `--message-file`, and `--dry-run`. The `tagHelper` setting in `.changes/config.yaml` chooses the command, and defaults to `semverkzeug`. It runs through the shell, so it can carry arguments, as in `nix run nixpkgs#semverkzeug --`. Any other command that accepts `bump PART` with those options works as well.
 
 In a monorepo, semverkzeug scopes the tags of a project by its directory, as in `mod/v1.2.0`. Set `tagPrefix` to `mod/v` so that the compare links use those tags.
+
+## Tag messages
+
+Git hosts such as GitHub show tag messages as plain text, without rendering Markdown. So the tag message has a template of its own, `tagTemplate`, which starts with a subject line and lists the kinds without Markdown headings. By default, a tag message looks like this:
+
+```
+release v1.0.0
+
+Added:
+* [FOO-1234] Added the thing. ([!19])
+
+[FOO-1234]: <https://jira.corp.com/browse/FOO-1234>
+[!19]: <https://gitlab.corp.com/project-url/-/merge_requests/19>
+```
+
+`tagTemplate` sees the values of `releaseTemplate`, including `kinds` and the partials `{{> version}}`, `{{> kind}}`, and `{{> change}}`. It also sees `references`, which holds the `label` and the `url` of each reference in the notes, see [Link issues and pull requests](changes.md#link-issues-and-pull-requests). Blank lines at the end of the message disappear, so a blank line before the references only shows when there are some. To list the entries without the kinds, set the template as follows:
+
+```yaml
+tagTemplate: |
+  release {{tag}}
+
+  {{#kinds}}
+  {{#changes}}
+  {{> change}}
+  {{/changes}}
+  {{/kinds}}
+
+  {{#references}}
+  [{{label}}]: <{{url}}>
+  {{/references}}
+```
 
 ## Update version numbers in other files
 

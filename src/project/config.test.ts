@@ -79,6 +79,10 @@ describe("configuration", () => {
       /releaseTemplate: template "\{\{#kinds\}\}": Unclosed section "kinds"/,
     ],
     [{ releaseTemplate: 7 }, /releaseTemplate: must be a string/],
+    [
+      { tagTemplate: "{{> notes}}" },
+      /tagTemplate: unknown partial \{\{> notes\}\}, expected one of: version, kind, change/,
+    ],
     [{ fields: [] }, /unknown setting "fields"/],
     [{ headerPath: "header.md" }, /unknown setting "headerPath"/],
     [{ extraFields: { key: "pr" } }, /extraFields: must be a list/],
