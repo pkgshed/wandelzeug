@@ -7,6 +7,7 @@
 
 import { message, text, value } from "@optique/core/message";
 import type { NonEmptyString } from "@optique/core/nonempty";
+import type { Suggestion } from "@optique/core/parser";
 import { choice, keyValue, type ValueParser } from "@optique/core/valueparser";
 import type { Release } from "../changelog/markers.ts";
 import {
@@ -34,6 +35,8 @@ type ValueSyntax<T> = {
   /** Returns undefined for text that the syntax does not accept. */
   readonly parse: (text: string) => T | undefined;
   readonly format: (parsed: T) => string;
+  /** Offers completions for the text typed so far. Without it, the shell completes nothing. */
+  readonly suggest?: (prefix: string) => Iterable<Suggestion>;
 };
 
 /** Builds a synchronous value parser from a parse function of wandelzeug. */
@@ -42,6 +45,7 @@ const valueParser = <T>(syntax: ValueSyntax<T>): ValueParser<"sync", T> => ({
   metavar: syntax.metavar,
   placeholder: syntax.placeholder,
   format: syntax.format,
+  suggest: syntax.suggest ?? (() => []),
   parse(input) {
     const parsed = syntax.parse(input);
     if (parsed === undefined) {
@@ -90,7 +94,7 @@ export const bumpValue: ValueParser<"sync", BumpArgument> = choice(
   { metavar: "BUMP" },
 );
 
-/** What "wlz batch" releases: an explicit version or a bump. */
+/** What "wlz batch" releases: an explicit version or a bump. The shell completes the bumps. */
 export const releaseTargetValue = valueParser<ReleaseTarget>({
   metavar: "VERSION",
   expected: `a semantic version or one of: ${BUMP_ARGUMENTS.join(", ")}`,
@@ -98,6 +102,21 @@ export const releaseTargetValue = valueParser<ReleaseTarget>({
   parse: parseReleaseTarget,
   format: (target) =>
     target.type === "bump" ? target.bump : formatVersion(target.version, ""),
+  suggest: (prefix) =>
+    BUMP_ARGUMENTS.filter((bump) => bump.startsWith(prefix)).map((bump) => ({
+      kind: "literal",
+      text: bump,
+    })),
+});
+
+/** A directory, which the shell completes from the file system. */
+export const directoryValue = valueParser<string>({
+  metavar: "DIR",
+  expected: "a directory",
+  placeholder: ".",
+  parse: (input) => input,
+  format: (directory) => directory,
+  suggest: (prefix) => [{ kind: "file", type: "directory", pattern: prefix }],
 });
 
 /**

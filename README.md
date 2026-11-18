@@ -24,6 +24,7 @@ wandelzeug records each change as its own small Markdown file and turns the coll
 - **Your layout:** Mustache templates shape the file names, the headings, the entries, and the whole release.
 - **Your history:** `wlz init` adopts an existing changelog and leaves everything that is already there in place.
 - **Monorepos:** each project keeps its own `.changes` directory.
+- **Shell completion:** Tab completes commands, options, and bumps in bash, zsh, fish, PowerShell, and Nushell.
 
 ## Install
 
@@ -38,6 +39,7 @@ Bun links `wlz` into `~/.bun/bin`, which must be on your `PATH`.
 - To see the installed version, run `wlz --version`.
 - To update to the newest commit, run `bun update -g wandelzeug`.
 - To uninstall, run `bun remove -g wandelzeug`.
+- To complete commands and options with Tab, install the completion script for your shell, see [Shell completion](docs/completion.md).
 
 To keep wandelzeug inside another repository instead, copy the single executable file `wlz.js`, which CI publishes as the `wlz` artifact.
 
@@ -74,6 +76,7 @@ To keep wandelzeug inside another repository instead, copy the single executable
 - [Change files](docs/changes.md) covers the file format, recording changes, extra fields, and checks in CI.
 - [The changelog](docs/changelog.md) covers the markers, links, templates, and adopting an existing changelog.
 - [Releases](docs/releases.md) covers versions, releasing and tagging, version numbers in other files, and monorepos.
+- [Shell completion](docs/completion.md) covers installing the completion script for each shell.
 
 ## Contributing
 

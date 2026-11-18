@@ -30,6 +30,7 @@ import { UsageError } from "../shared/foundations.ts";
 import { HELP_THEME } from "./theme.ts";
 import {
   bumpValue,
+  directoryValue,
   gitRefValue,
   isoDateValue,
   metaEntryValue,
@@ -43,7 +44,7 @@ import {
 /** The options that every command takes. */
 const COMMON_OPTIONS = {
   directory: optional(
-    option("-C", "--directory", string({ metavar: "DIR" }), {
+    option("-C", "--directory", directoryValue, {
       description: message`Run as if started in DIR`,
     }),
   ),
@@ -323,6 +324,10 @@ export function readCommandLine(
       version: {
         option: true,
         value: WANDELZEUG_VERSION,
+        onShow: showOutput,
+      },
+      completion: {
+        command: true,
         onShow: showOutput,
       },
       aboveError: "none",
