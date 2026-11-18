@@ -404,6 +404,11 @@ const ConfigSchema = v.pipe(
      * --dry-run options.
      */
     tagHelper: setting(nonEmptyText, "semverkzeug"),
+    /**
+     * Whether "batch" and "release" write a data block at the bottom of
+     * each release, which "render" needs to render the release again.
+     */
+    releaseData: setting(v.boolean("must be true or false"), true),
     /** Files whose version numbers "batch" and "release" update with each release. */
     replacements: setting(v.array(ReplacementSchema, "must be a list"), []),
     /** Kinds in changelog order. */

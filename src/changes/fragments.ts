@@ -93,6 +93,22 @@ export function splitFrontMatter(text: string): FrontMatterDocument {
   };
 }
 
+/**
+ * Builds a change from its fields and its body, as a fragment file or the
+ * data block of a release holds them. The kind stays as written, for the
+ * caller to resolve against the configured kinds.
+ */
+export function changeFromFields(fields: RawRecord, body: string): Change {
+  const { kind, ...metadata } = fields;
+  if (typeof kind !== "string") {
+    throw new Error("kind is missing");
+  }
+  if (isBlankBody(body)) {
+    throw new Error("body is empty");
+  }
+  return { kind, metadata: parseMetadata(metadata), body };
+}
+
 /** Parses the text of a fragment file and resolves its kind against the configured kinds. */
 export function parseChange(text: string, kinds: readonly Kind[]): Change {
   const document = splitFrontMatter(text);
@@ -101,19 +117,8 @@ export function parseChange(text: string, kinds: readonly Kind[]): Change {
     throw new Error("front matter must be a mapping");
   }
 
-  const { kind, ...metadata } = fields;
-  if (typeof kind !== "string") {
-    throw new Error("front matter needs a kind");
-  }
-  if (isBlankBody(document.body)) {
-    throw new Error("body is empty");
-  }
-
-  return {
-    kind: resolveKind(kinds, kind).label,
-    metadata: parseMetadata(metadata),
-    body: document.body,
-  };
+  const change = changeFromFields(fields, document.body);
+  return { ...change, kind: resolveKind(kinds, change.kind).label };
 }
 
 /**

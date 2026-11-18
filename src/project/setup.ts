@@ -8,7 +8,8 @@ import { dirname, join } from "node:path";
 import {
   anchorMarker,
   hasMarker,
-  LINKS_ANCHOR,
+  LINKS_BEGIN,
+  LINKS_END,
   type Release,
 } from "../changelog/markers.ts";
 import {
@@ -56,7 +57,7 @@ export const initConfig = (
 # Directory below .changes for unreleased change files.
 unreleasedDir: unreleased
 # Changelog that "wlz batch" adds each release to, right below the
-# <!-- wlz:releases --> anchor, with its link below <!-- wlz:links -->.
+# <!-- wlz:releases --> anchor, with its link below <!-- BEGIN wlz:links -->.
 changelogPath: CHANGELOG.md
 # Prefix of release names and the {{version}} value, as in "1.1.2".
 versionPrefix: ""
@@ -101,7 +102,7 @@ releaseTemplate: |
   {{/changes}}
   {{/kinds}}
 
-# Link definition of a release, below the <!-- wlz:links --> anchor. It
+# Link definition of a release, below the <!-- BEGIN wlz:links --> marker. It
 # compares the tag with the previous tag, or links the tag of a first
 # release. Values: those of versionFormat and repositoryUrl. An empty
 # linkFormat turns links off.
@@ -112,6 +113,12 @@ linkFormat: ${yamlString(DEFAULT_CONFIG.linkFormat)}
 # it may carry arguments, and it must accept "bump PART" with the options
 # --expect, --message-file and --dry-run.
 tagHelper: ${yamlString(DEFAULT_CONFIG.tagHelper)}
+
+# Whether "batch" and "release" write a data block at the bottom of each
+# release: an HTML comment with the date and the changes of the release.
+# "wlz render" needs it to render the release again after a template
+# changes, and "wlz import" writes it for existing releases.
+releaseData: ${DEFAULT_CONFIG.releaseData}
 
 # Files whose version numbers "batch" and "release" update with each
 # release, such as package.json. find is a JavaScript regular expression,
@@ -235,30 +242,31 @@ function insertLinesAt(
 }
 
 /**
- * Adds the links anchor below the release anchor: right above the first
- * link definition that names a version, so an "[unreleased]" definition
- * stays on top, or else at the end.
+ * Adds the empty BEGIN and END pair for link definitions below the release
+ * anchor: right above the first link definition that names a version, so
+ * an "[unreleased]" definition stays on top, or else at the end.
  */
-function insertLinksAnchor(lines: readonly string[], anchor: number): string[] {
+function insertLinkMarkers(lines: readonly string[], anchor: number): string[] {
   const definition = lines.findIndex(
     (line, index) => index > anchor && VERSION_LINK.test(line),
   );
   if (definition === -1) {
-    return insertLinesAt(lines, lines.length, [LINKS_ANCHOR, ""]);
+    return insertLinesAt(lines, lines.length, [LINKS_BEGIN, LINKS_END, ""]);
   }
   return [
     ...lines.slice(0, definition),
-    LINKS_ANCHOR,
+    LINKS_BEGIN,
+    LINKS_END,
     ...lines.slice(definition),
   ];
 }
 
-/** A changelog from before wandelzeug with the anchors added. */
+/** A changelog from before wandelzeug with the markers added. */
 export type Onboarding = {
   readonly text: string;
   /** The line of the release anchor, counting from 1. */
   readonly anchorLine: number;
-  /** The line of the links anchor, counting from 1. */
+  /** The line of the BEGIN wlz:links marker, counting from 1. */
   readonly linksLine: number;
   readonly baseline: string | undefined;
 };
@@ -279,12 +287,12 @@ function pickBaseline(releases: readonly Release[]): Release | undefined {
 }
 
 /**
- * Adds the anchors to a changelog from before wandelzeug. The release anchor
+ * Adds the markers to a changelog from before wandelzeug. The release anchor
  * goes above the first heading that names a version, such as "## 1.4.2" or
  * "## [1.4.2]". The newest stable version among those headings becomes the
  * baseline unless one is given. Without such a heading, the anchor goes to
- * the end. The links anchor follows as insertLinksAnchor describes. Apart
- * from the anchors and the blank lines around them, no line changes.
+ * the end. The link markers follow as insertLinkMarkers describes. Apart
+ * from the markers and the blank lines around them, no line changes.
  */
 export function onboardChangelog(
   text: string,
@@ -298,17 +306,17 @@ export function onboardChangelog(
   const anchor = anchorMarker(baselineName);
   const position = headings[0]?.index ?? lines.length;
   const withAnchor = insertLinesAt(lines, position, [anchor, ""]);
-  const result = insertLinksAnchor(withAnchor, withAnchor.indexOf(anchor));
+  const result = insertLinkMarkers(withAnchor, withAnchor.indexOf(anchor));
   return {
     text: result.join(text.includes("\r\n") ? "\r\n" : "\n"),
     anchorLine: result.indexOf(anchor) + 1,
-    linksLine: result.indexOf(LINKS_ANCHOR) + 1,
+    linksLine: result.indexOf(LINKS_BEGIN) + 1,
     baseline: baselineName,
   };
 }
 
 const newChangelog = (baseline: string | undefined): string =>
-  `${INIT_HEADER}\n${anchorMarker(baseline)}\n\n${LINKS_ANCHOR}\n`;
+  `${INIT_HEADER}\n${anchorMarker(baseline)}\n\n${LINKS_BEGIN}\n${LINKS_END}\n`;
 
 /** What init does to the changelog, planned before anything is written. */
 type ChangelogSetup = InitResult & {
@@ -321,7 +329,7 @@ function describeOnboarding(onboarding: Onboarding): string {
     onboarding.baseline === undefined
       ? "without a baseline"
       : `with baseline ${onboarding.baseline}`;
-  return `added the release anchor on line ${onboarding.anchorLine} ${baseline}, and the links anchor on line ${onboarding.linksLine}`;
+  return `added the release anchor on line ${onboarding.anchorLine} ${baseline}, and the link markers on line ${onboarding.linksLine}`;
 }
 
 async function planChangelogSetup(
@@ -343,13 +351,13 @@ async function planChangelogSetup(
   if (hasAnchors) {
     if (baseline !== undefined) {
       throw new UsageError(
-        `init: ${displayPath(path)} has wlz anchors already, change its baseline there`,
+        `init: ${displayPath(path)} has wlz markers already, change its baseline there`,
       );
     }
     return {
       path,
       action: "kept",
-      detail: "it has wlz anchors already",
+      detail: "it has wlz markers already",
       content: undefined,
     };
   }
@@ -427,8 +435,8 @@ export type InitOptions = {
 
 /**
  * Sets up wandelzeug in a directory: the configuration, the unreleased
- * directory, and a changelog with the anchors. An existing changelog only
- * gets the anchors added, as onboardChangelog describes. Fails when a
+ * directory, and a changelog with the markers. An existing changelog only
+ * gets the markers added, as onboardChangelog describes. Fails when a
  * configuration exists already, before it writes anything.
  */
 export async function initProject(

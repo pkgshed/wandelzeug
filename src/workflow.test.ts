@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { notesHash } from "./changelog/data.ts";
 import {
   planRelease,
   removeFragments,
@@ -71,8 +72,7 @@ describe("project workflow", () => {
       releaseTarget("auto"),
       isoDate("2026-11-17"),
     );
-    const firstSection = [
-      "<!-- BEGIN wlz:release 0.1.0 -->",
+    const firstNotes = [
       "## [`0.1.0`] (2026-11-17)",
       "",
       "### Added",
@@ -83,6 +83,19 @@ describe("project workflow", () => {
       "### Fixed",
       "",
       "* Crash on empty input",
+    ].join("\n");
+    const firstSection = [
+      "<!-- BEGIN wlz:release 0.1.0 -->",
+      firstNotes,
+      "",
+      `<!-- wlz:data date=2026-11-17 hash=${notesHash(firstNotes)}`,
+      "Added:",
+      '  - body: "* Support for TOML config"',
+      '  - body: "* A dry-run flag for batch"',
+      "Fixed:",
+      "  - pr: 7",
+      '    body: "* Crash on empty input"',
+      "-->",
       "<!-- END wlz:release 0.1.0 -->",
     ].join("\n");
     expect(first.path).toBe(join(root, "CHANGELOG.md"));
@@ -102,24 +115,28 @@ describe("project workflow", () => {
     );
     await writeRelease(second);
 
+    const secondNotes =
+      "## [`0.1.1`] (2026-11-18)\n\n### Fixed\n\n* Hang on exit";
     expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toBe(
       [
         INIT_HEADER,
         "<!-- wlz:releases -->",
         "",
         "<!-- BEGIN wlz:release 0.1.1 -->",
-        "## [`0.1.1`] (2026-11-18)",
+        secondNotes,
         "",
-        "### Fixed",
-        "",
-        "* Hang on exit",
+        `<!-- wlz:data date=2026-11-18 hash=${notesHash(secondNotes)}`,
+        "Fixed:",
+        '  - body: "* Hang on exit"',
+        "-->",
         "<!-- END wlz:release 0.1.1 -->",
         "",
         firstSection,
         "",
-        "<!-- wlz:links -->",
+        "<!-- BEGIN wlz:links -->",
         "[`0.1.1`]: https://codeberg.org/o/r/compare/v0.1.0...v0.1.1",
         "[`0.1.0`]: https://codeberg.org/o/r/releases/tag/v0.1.0",
+        "<!-- END wlz:links -->",
         "",
       ].join("\n"),
     );
@@ -167,13 +184,11 @@ describe("project workflow", () => {
       releaseTarget("2.0.0"),
       isoDate("2026-11-17"),
     );
-    expect(plan.section).toBe(
+    expect(plan.notes).toBe(
       [
-        "<!-- BEGIN wlz:release 2.0.0 -->",
         "# Release 2.0.0",
         "- [Changed] API renamed (breaking)",
         "- [Fixed] Crash",
-        "<!-- END wlz:release 2.0.0 -->",
       ].join("\n"),
     );
   });
@@ -195,9 +210,7 @@ describe("project workflow", () => {
       releaseTarget("1.1.0"),
       isoDate("2026-11-17"),
     );
-    expect(plan.section).toContain(
-      "## [`1.1.0`] (2026-11-17)\n- Feature\n- Crash\n<!-- END",
-    );
+    expect(plan.notes).toBe("## [`1.1.0`] (2026-11-17)\n- Feature\n- Crash");
   });
 
   test.each([
@@ -276,10 +289,10 @@ describe("project workflow", () => {
       path: join(root, "CHANGELOG.md"),
       action: "updated",
       detail:
-        "added the release anchor on line 3 with baseline 1.4.2, and the links anchor on line 9",
+        "added the release anchor on line 3 with baseline 1.4.2, and the link markers on line 9",
     });
     expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toBe(
-      "# History\n\n<!-- wlz:releases baseline=1.4.2 -->\n\n## 1.4.2\n\n* Fix\n\n<!-- wlz:links -->\n",
+      "# History\n\n<!-- wlz:releases baseline=1.4.2 -->\n\n## 1.4.2\n\n* Fix\n\n<!-- BEGIN wlz:links -->\n<!-- END wlz:links -->\n",
     );
   });
 
@@ -295,7 +308,7 @@ describe("project workflow", () => {
     await writeChangelog(root);
     await expect(
       initProject(root, { baseline: release("2.0.0") }),
-    ).rejects.toThrow(/has wlz anchors already, change its baseline there/);
+    ).rejects.toThrow(/has wlz markers already, change its baseline there/);
     expect(await Bun.file(join(root, ".changes", "config.yaml")).exists()).toBe(
       false,
     );

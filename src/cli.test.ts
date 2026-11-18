@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { version as packageVersion } from "../package.json" with { type: "json" };
+import { notesHash } from "./changelog/data.ts";
 import {
   commitAll,
   git,
@@ -135,7 +136,7 @@ describe("command line", () => {
   }
 
   test.each([
-    [["re"], ["release"]],
+    [["re"], ["release", "render"]],
     [
       ["release", "m"],
       ["major", "minor"],
@@ -210,6 +211,11 @@ describe("command line", () => {
         "### Added",
         "",
         "* Feature",
+        "",
+        `<!-- wlz:data date=2026-11-17 hash=${notesHash("## [`0.1.0`] (2026-11-17)\n\n### Added\n\n* Feature")}`,
+        "Added:",
+        '  - body: "* Feature"',
+        "-->",
         "<!-- END wlz:release 0.1.0 -->",
         "",
         "[`0.1.0`]: https://codeberg.org/o/r/releases/tag/v0.1.0",
@@ -257,7 +263,7 @@ describe("command line", () => {
   test("next and latest start from the baseline of an onboarded changelog", async () => {
     await writeFile(join(root, "CHANGELOG.md"), "# History\n\n## [1.2.3]\n");
     expect((await run("init")).stdout).toContain(
-      "updated CHANGELOG.md (added the release anchor on line 3 with baseline 1.2.3, and the links anchor on line 7)",
+      "updated CHANGELOG.md (added the release anchor on line 3 with baseline 1.2.3, and the link markers on line 7)",
     );
     expect((await run("latest")).stdout).toBe("1.2.3\n");
     expect((await run("next", "major")).stdout).toBe("2.0.0\n");
@@ -544,6 +550,278 @@ describe("command line", () => {
     expect(result.stderr).toMatch(message);
   });
 
+  describe("render", () => {
+    /** Has init set up a project with links, and releases 0.1.0 and 0.1.1. */
+    async function projectWithReleases(): Promise<void> {
+      await run("init", "--repository", "https://codeberg.org/o/r");
+      await run("new", "-k", "Added", "-b", "* Feature", "-m", "pr=42");
+      await run("batch", "minor", "--date", "2026-11-17");
+      await run("new", "-k", "Fixed", "-b", "* Crash");
+      await run("batch", "patch", "--date", "2026-11-18");
+    }
+
+    /** Replaces the line of a setting in the configuration that init wrote. */
+    async function setSetting(key: string, value: string): Promise<void> {
+      const path = join(root, ".changes/config.yaml");
+      const config = await readFile(path, "utf8");
+      const line = new RegExp(`^${key}: .*$`, "m");
+      await writeFile(
+        path,
+        config.replace(line, `${key}: ${JSON.stringify(value)}`),
+      );
+    }
+
+    const changelog = () => readFile(join(root, "CHANGELOG.md"), "utf8");
+
+    async function changeTemplates(): Promise<void> {
+      await setSetting("changeFormat", "{{body}}{{#pr}} (#{{pr}}){{/pr}}");
+      await setSetting(
+        "linkFormat",
+        "[`{{version}}`]: {{repositoryUrl}}/releases/tag/{{tag}}",
+      );
+    }
+
+    test("it renders past releases and their links with new templates", async () => {
+      await projectWithReleases();
+      await changeTemplates();
+
+      expect(await run("render")).toMatchObject({
+        exitCode: 0,
+        stdout: "rendered 2 releases in CHANGELOG.md\n",
+      });
+      const text = await changelog();
+      expect(text).toContain("\n* Feature (#42)\n");
+      expect(text).toContain(
+        "\n[`0.1.1`]: https://codeberg.org/o/r/releases/tag/v0.1.1\n",
+      );
+      expect((await run("check")).exitCode).toBe(0);
+    });
+
+    test("--dry-run prints the changelog and writes nothing", async () => {
+      await projectWithReleases();
+      await changeTemplates();
+      const before = await changelog();
+
+      const result = await run("render", "--dry-run");
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("\n* Feature (#42)\n");
+      expect(await changelog()).toBe(before);
+    });
+
+    test("a hand edit stops render until --force renders over it", async () => {
+      await projectWithReleases();
+      const path = join(root, "CHANGELOG.md");
+      await writeFile(
+        path,
+        (await changelog()).replace("\n* Crash\n", "\n* Crash, by hand\n"),
+      );
+      const edited = await changelog();
+      const problem =
+        "release 0.1.1 was edited by hand since wandelzeug rendered it";
+
+      const check = await run("check");
+      expect(check.exitCode).toBe(1);
+      expect(check.stderr).toContain(problem);
+
+      const refused = await run("render");
+      expect(refused.exitCode).toBe(1);
+      expect(refused.stderr).toContain(problem);
+      expect(refused.stderr).toContain("pass --force");
+      expect(await changelog()).toBe(edited);
+
+      expect((await run("render", "--force")).exitCode).toBe(0);
+      expect(await changelog()).not.toContain("by hand");
+      expect((await run("check")).exitCode).toBe(0);
+    });
+
+    test("a kind that the configuration lacks stops render and check", async () => {
+      await projectWithReleases();
+      await editConfig("  - label: Fixed", "  - label: Repaired");
+      const problem =
+        'release 0.1.1 has changes of kind "Fixed", which the configuration lacks';
+
+      const refused = await run("render", "--force");
+      expect(refused.exitCode).toBe(1);
+      expect(refused.stderr).toContain(problem);
+      expect((await run("check")).stderr).toContain(problem);
+    });
+
+    test("releaseData: false leaves the data block out until an import", async () => {
+      await run("init");
+      await editConfig("releaseData: true", "releaseData: false");
+      await run("new", "-k", "Added", "-b", "* Feature");
+      await run("batch", "minor", "--date", "2026-11-17");
+      expect(await changelog()).not.toContain("<!-- wlz:data");
+
+      const refused = await run("import");
+      expect(refused.exitCode).toBe(1);
+      expect(refused.stderr).toContain(
+        "import: releaseData is off in .changes/config.yaml, turn it on to give releases data blocks",
+      );
+
+      await editConfig("releaseData: false", "releaseData: true");
+      expect((await run("import")).stdout).toBe("imported 1 release: 0.1.0\n");
+      expect(await changelog()).toContain(
+        "* Feature\n\n<!-- wlz:data date=2026-11-17 hash=",
+      );
+      expect((await run("check")).exitCode).toBe(0);
+    });
+
+    test("an empty repositoryUrl keeps the link definitions", async () => {
+      await projectWithReleases();
+      await setSetting("repositoryUrl", "");
+      const before = await changelog();
+
+      expect(await run("render")).toMatchObject({
+        exitCode: 0,
+        stdout:
+          "rendered 2 releases in CHANGELOG.md\nkept the link definitions as they are, because repositoryUrl is empty\n",
+      });
+      expect(await changelog()).toBe(before);
+    });
+
+    test("releases without a data block and the links stay as they are", async () => {
+      await run("init", "--repository", "https://codeberg.org/o/r");
+      const legacy = [
+        "<!-- BEGIN wlz:release 0.1.0 -->",
+        "## 0.1.0 by hand",
+        "<!-- END wlz:release 0.1.0 -->",
+      ].join("\n");
+      const path = join(root, "CHANGELOG.md");
+      await writeFile(
+        path,
+        (await changelog())
+          .replace(
+            "<!-- wlz:releases -->\n",
+            `<!-- wlz:releases -->\n\n${legacy}\n`,
+          )
+          .replace(
+            "<!-- BEGIN wlz:links -->\n",
+            "<!-- BEGIN wlz:links -->\n[`0.1.0`]: old\n",
+          ),
+      );
+      await run("new", "-k", "Added", "-b", "* Feature", "-m", "pr=42");
+      await run("batch", "minor", "--date", "2026-11-17");
+      await changeTemplates();
+
+      expect(await run("render")).toMatchObject({
+        exitCode: 0,
+        stdout:
+          "rendered 1 release in CHANGELOG.md\nkept 1 release without a data block and the link definitions as they are\n",
+      });
+      const text = await changelog();
+      expect(text).toContain(`${legacy}\n`);
+      expect(text).toContain("\n* Feature (#42)\n");
+      expect(text).toContain(
+        "<!-- BEGIN wlz:links -->\n[`0.2.0`]: https://codeberg.org/o/r/compare/v0.1.0...v0.2.0\n[`0.1.0`]: old\n",
+      );
+    });
+  });
+
+  describe("import", () => {
+    const history = [
+      "# Changelog",
+      "",
+      "## [1.1.0] - 2025-03-01",
+      "",
+      "### Misc",
+      "",
+      "- Tidied up",
+      "",
+      "## [1.0.0] - 2025-01-01",
+      "",
+      "### Added",
+      "",
+      "- First release",
+      "",
+      "[1.1.0]: https://example.com/compare/v1.0.0...v1.1.0",
+      "[1.0.0]: https://example.com/releases/tag/v1.0.0",
+      "",
+    ].join("\n");
+
+    const writeHistory = (text: string) =>
+      writeFile(join(root, "CHANGELOG.md"), text);
+
+    test("init --import explains where it stopped and what to do next", async () => {
+      await writeHistory(
+        history.replace(
+          "## [1.1.0]",
+          "## [1.2.0] - 2025-04-01\n\n### Fixed\n\n- Crash\n\n## [1.1.0]",
+        ),
+      );
+      const result = await run("init", "--import");
+      expect(result.exitCode).toBe(0);
+      const lines = (await readFile(join(root, "CHANGELOG.md"), "utf8")).split(
+        "\n",
+      );
+      const line = lines.indexOf("## [1.1.0] - 2025-03-01") + 1;
+      expect(result.stdout).toEndWith(
+        [
+          "imported 1 release: 1.2.0",
+          `stopped at release 1.1.0 on line ${line}: its section "Misc" matches no configured kind`,
+          "1.1.0 is now the baseline, and it and the releases below it stay as they are",
+          'to import them too, change what stopped the import and run "wlz import" again',
+          "",
+        ].join("\n"),
+      );
+      expect((await run("latest")).stdout).toBe("1.2.0\n");
+    });
+
+    test("import converts the rest after a fix, and then finds nothing", async () => {
+      await writeHistory(history);
+      await run("init", "--import");
+      await writeHistory(
+        (await readFile(join(root, "CHANGELOG.md"), "utf8")).replace(
+          "### Misc",
+          "### Changed",
+        ),
+      );
+
+      expect(await run("import")).toMatchObject({
+        exitCode: 0,
+        stdout: [
+          "imported 2 releases: 1.1.0, 1.0.0",
+          "moved 2 link definitions inside the wlz:links markers",
+          "removed the baseline, because every release has a data block now",
+          "",
+        ].join("\n"),
+      });
+      expect((await run("check")).exitCode).toBe(0);
+      expect((await run("import")).stdout).toBe(
+        "found no releases without a data block\n",
+      );
+    });
+
+    test("init without --import keeps the history as it is", async () => {
+      await writeHistory(history);
+      const result = await run("init");
+      expect(result.stdout).not.toContain("imported");
+      const text = await readFile(join(root, "CHANGELOG.md"), "utf8");
+      expect(text).not.toContain("BEGIN wlz:release");
+    });
+
+    test("init --import takes no --baseline", async () => {
+      await writeHistory(history);
+      const result = await run("init", "--import", "--baseline", "1.0.0");
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr).toContain(
+        "init: --import picks the baseline itself, so it takes no --baseline",
+      );
+    });
+
+    test("render keeps the link definitions while repositoryUrl is empty", async () => {
+      await writeHistory(history.replace("### Misc", "### Changed"));
+      await run("init", "--import");
+      const result = await run("render");
+      expect(result.stdout).toBe(
+        "rendered 2 releases in CHANGELOG.md\nkept the link definitions as they are, because repositoryUrl is empty\n",
+      );
+      expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toContain(
+        "<!-- BEGIN wlz:links -->\n[1.1.0]: https://example.com/compare/v1.0.0...v1.1.0\n[1.0.0]: https://example.com/releases/tag/v1.0.0\n<!-- END wlz:links -->",
+      );
+    });
+  });
+
   describe("release", () => {
     let helperDirectory: string;
 
@@ -652,7 +930,7 @@ describe("command line", () => {
       const result = await run("release", "minor", "--dry-run");
 
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("<!-- BEGIN wlz:release 0.1.0 -->");
+      expect(result.stdout).toContain("<!-- END wlz:release 0.1.0 -->");
       expect(await helperCalls()).toEqual([
         `-C ${root} bump minor --expect 0.1.0 --dry-run`,
       ]);

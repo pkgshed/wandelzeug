@@ -35,14 +35,14 @@ import {
   type Version,
   ZERO_VERSION,
 } from "../shared/versions.ts";
+import { notesHash, type ReleaseData } from "./data.ts";
 import {
-  beginMarker,
-  endMarker,
   insertRelease,
   knownReleases,
-  LINKS_ANCHOR,
+  LINKS_BEGIN,
   readChangelog,
   type Release,
+  releaseSection,
 } from "./markers.ts";
 
 /** Arguments that name a bump instead of a version. */
@@ -175,9 +175,13 @@ export function renderRelease(
   return renderTemplate(project.templates.release, view, partials).trim();
 }
 
-/** Wraps the notes of a release in its BEGIN and END markers. */
-const wrapInMarkers = (name: string, notes: string): string =>
-  [beginMarker(name), notes, endMarker(name)].join("\n");
+const repositoryUrlOf = (project: Project): string =>
+  project.config.repositoryUrl.replace(/\/+$/, "");
+
+/** Reports whether links are off because linkFormat needs repositoryUrl, which is empty. */
+export const linksLackRepository = (project: Project): boolean =>
+  project.templates.link.names.includes("repositoryUrl") &&
+  repositoryUrlOf(project) === "";
 
 /**
  * Renders the link definition of a release, or returns undefined when links
@@ -189,11 +193,13 @@ export function renderLink(
   values: ReleaseValues,
 ): string | undefined {
   const { link } = project.templates;
-  const repositoryUrl = project.config.repositoryUrl.replace(/\/+$/, "");
-  const lacksRepository =
-    link.names.includes("repositoryUrl") && repositoryUrl === "";
-  if (link.source.trim() === "" || lacksRepository) return undefined;
-  return renderTemplate(link, { ...values, repositoryUrl }).trim();
+  if (link.source.trim() === "" || linksLackRepository(project)) {
+    return undefined;
+  }
+  return renderTemplate(link, {
+    ...values,
+    repositoryUrl: repositoryUrlOf(project),
+  }).trim();
 }
 
 /** What a release gets as its version: an explicit version or a bump of the latest release. */
@@ -234,6 +240,38 @@ function rejectExistingRelease(
   }
 }
 
+/**
+ * Orders changes by the configured order of their kinds, and keeps the
+ * order within each kind, as the notes have them. Kinds that the
+ * configuration lacks come last.
+ */
+export function inKindOrder(
+  changes: readonly Change[],
+  kinds: readonly Kind[],
+): Change[] {
+  const rank = (change: Change): number => {
+    const kind = findKind(kinds, change.kind);
+    return kind === undefined ? kinds.length : kinds.indexOf(kind);
+  };
+  return [...changes].sort((a, b) => rank(a) - rank(b));
+}
+
+/** The data block of a new release: its date, its changes without their files, and the hash of its notes. */
+const releaseData = (
+  date: IsoDate,
+  changes: readonly Change[],
+  kinds: readonly Kind[],
+  notes: string,
+): ReleaseData => ({
+  date,
+  hash: notesHash(notes),
+  changes: inKindOrder(changes, kinds).map(({ kind, metadata, body }) => ({
+    kind,
+    metadata,
+    body,
+  })),
+});
+
 /** The changelog with a new release, and the fragments the release consumes. */
 export type ReleasePlan = {
   readonly path: string;
@@ -241,7 +279,7 @@ export type ReleasePlan = {
   readonly version: Version;
   /** The release as the template renders it, without markers, such as for a tag message. */
   readonly notes: string;
-  /** The release with its markers, as batch inserts it. */
+  /** The release with its markers, and its data block when releaseData is on, as batch inserts it. */
   readonly section: string;
   /** The link definition that batch inserts below the links anchor, when links are on. */
   readonly link: string | undefined;
@@ -281,11 +319,14 @@ export async function planRelease(
 
   const values = releaseValues(project.config, version, date, releases);
   const notes = renderRelease(project, values, fragments);
-  const section = wrapInMarkers(values.version, notes);
+  const data = project.config.releaseData
+    ? releaseData(date, fragments, project.config.kinds, notes)
+    : undefined;
+  const section = releaseSection(values.version, data, notes);
   const link = renderLink(project, values);
   if (link !== undefined && document.links === undefined) {
     throw new Error(
-      `${displayPath(changelogPath(project))}: no ${LINKS_ANCHOR} anchor for the link of ${values.version}, add one where the link definitions go or set linkFormat to ""`,
+      `${displayPath(changelogPath(project))}: no ${LINKS_BEGIN} marker for the link of ${values.version}, add the BEGIN and END wlz:links markers where the link definitions go or set linkFormat to ""`,
     );
   }
   return {

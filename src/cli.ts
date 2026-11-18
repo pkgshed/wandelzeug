@@ -23,6 +23,7 @@
  * Run "wlz --help" for the command reference.
  */
 
+import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   type ChangelogDocument,
@@ -38,6 +39,12 @@ import {
   removeFragments,
   writeRelease,
 } from "./changelog/releases.ts";
+import {
+  type ImportPlan,
+  type ImportStop,
+  planImport,
+} from "./changelog/import.ts";
+import { planRender, type RenderPlan } from "./changelog/render.ts";
 import {
   editorCommand,
   findKeptDraft,
@@ -83,13 +90,94 @@ const formatInitResult = (result: InitResult): string => {
   return `${result.action} ${displayPath(result.path)}${detail}`;
 };
 
+/** Describes why the import stopped, what that means, and what to do. */
+function describeStop(plan: ImportPlan, stop: ImportStop): string[] {
+  const { name } = stop.release;
+  const outcome = stop.legacy
+    ? `${name} ${plan.baseline.before?.name === name ? "remains" : "is now"} the baseline, and it and the releases below it stay as they are`
+    : `${name} keeps its notes without a data block, and the releases below it stay as they are`;
+  return [
+    `stopped at release ${name} on line ${stop.line + 1}: ${stop.reason}`,
+    outcome,
+    'to import them too, change what stopped the import and run "wlz import" again',
+  ];
+}
+
+/** Describes what an import did, line by line. */
+function describeImport(plan: ImportPlan): string[] {
+  const names = plan.converted.map((release) => release.name).join(", ");
+  const converted =
+    plan.converted.length === 0
+      ? []
+      : [`imported ${countOf(plan.converted.length, "release")}: ${names}`];
+  const moved =
+    plan.movedLinks === 0
+      ? []
+      : [
+          `moved ${countOf(plan.movedLinks, "link definition")} inside the wlz:links markers`,
+        ];
+  const unmoved =
+    plan.unmovedLinks === 0
+      ? []
+      : [
+          `left ${countOf(plan.unmovedLinks, "link definition")} in place, because the changelog lacks the wlz:links markers`,
+        ];
+  const removedBaseline =
+    plan.baseline.before !== undefined && plan.baseline.after === undefined
+      ? ["removed the baseline, because every release has a data block now"]
+      : [];
+  const stop = plan.stop === undefined ? [] : describeStop(plan, plan.stop);
+  const lines = [
+    ...converted,
+    ...moved,
+    ...unmoved,
+    ...removedBaseline,
+    ...stop,
+  ];
+  return lines.length === 0
+    ? ["found no releases without a data block"]
+    : lines;
+}
+
+/** Gives data blocks to the releases of a project that lack one, and reports what happened. */
+async function importReleases(project: Project): Promise<void> {
+  if (!project.config.releaseData) {
+    throw new Error(
+      "import: releaseData is off in .changes/config.yaml, turn it on to give releases data blocks",
+    );
+  }
+  const document = await readChangelog(project);
+  const plan = planImport(document, project.config.kinds);
+  if (plan.content !== document.lines.join(document.newline)) {
+    await writeFile(changelogPath(project), plan.content);
+  }
+  describeImport(plan).forEach((line) => console.log(line));
+}
+
+/** Rejects --baseline next to --import, which picks the baseline itself. */
+function rejectBaselineWithImport(invocation: InvocationOf<"init">): void {
+  if (invocation.import && invocation.baseline !== undefined) {
+    throw new UsageError(
+      "init: --import picks the baseline itself, so it takes no --baseline",
+    );
+  }
+}
+
 async function runInit(invocation: InvocationOf<"init">): Promise<void> {
+  rejectBaselineWithImport(invocation);
   const directory = resolve(invocation.directory ?? ".");
   const results = await initProject(directory, {
     baseline: invocation.baseline,
     repositoryUrl: invocation.repository,
   });
   results.forEach((result) => console.log(formatInitResult(result)));
+  if (invocation.import) {
+    await importReleases(await openProject(directory));
+  }
+}
+
+async function runImport(invocation: InvocationOf<"import">): Promise<void> {
+  await importReleases(await openInvocationProject(invocation));
 }
 
 /** The invocation of "new" that writes a new change instead of resuming a draft. */
@@ -199,6 +287,35 @@ async function runBatch(invocation: InvocationOf<"batch">): Promise<void> {
   );
 }
 
+/** Describes what render left as it was, if anything. */
+function keptDescription(plan: RenderPlan): string | undefined {
+  switch (plan.keptLinks) {
+    case undefined:
+      return undefined;
+    case "release without data": {
+      const releases = countOf(plan.withoutData, "release");
+      return `kept ${releases} without a data block and the link definitions as they are`;
+    }
+    case "empty repositoryUrl":
+      return "kept the link definitions as they are, because repositoryUrl is empty";
+  }
+}
+
+async function runRender(invocation: InvocationOf<"render">): Promise<void> {
+  const project = await openInvocationProject(invocation);
+  const plan = await planRender(project, { force: invocation.force });
+  if (invocation.dryRun) {
+    process.stdout.write(plan.content);
+    return;
+  }
+
+  await writeFile(plan.path, plan.content);
+  const releases = countOf(plan.rendered, "release");
+  console.log(`rendered ${releases} in ${displayPath(plan.path)}`);
+  const kept = keptDescription(plan);
+  if (kept !== undefined) console.log(kept);
+}
+
 async function runLatest(invocation: InvocationOf<"latest">): Promise<void> {
   const project = await openInvocationProject(invocation);
   const [latest] = knownReleases(await readChangelog(project));
@@ -278,6 +395,10 @@ function runInvocation(invocation: Invocation): Promise<void> {
       return runBatch(invocation);
     case "release":
       return runRelease(invocation);
+    case "render":
+      return runRender(invocation);
+    case "import":
+      return runImport(invocation);
     case "latest":
       return runLatest(invocation);
     case "next":
