@@ -22,7 +22,12 @@ import {
   releaseSection,
   replaceLines,
 } from "./markers.ts";
-import { releaseValues, renderLink, renderRelease } from "./releases.ts";
+import {
+  linksLackRepository,
+  releaseValues,
+  renderLink,
+  renderRelease,
+} from "./releases.ts";
 
 /** A release with its data block. */
 type DataSection = ReleaseSection & { readonly data: ReleaseData };
@@ -138,13 +143,18 @@ export type RenderPlan = {
   readonly content: string;
   /** The number of releases that render from their data blocks. */
   readonly rendered: number;
-  /**
-   * The number of marked releases without a data block. They stay as they
-   * are, and so do the link definitions, which need the date of every
-   * release.
-   */
+  /** The number of marked releases without a data block, which stay as they are. */
   readonly withoutData: number;
+  /** Why the link definitions stay as they are, if they do. */
+  readonly keptLinks: KeptLinks | undefined;
 };
+
+/**
+ * Why render keeps the link definitions as they are: a link needs the date
+ * of its release, which a release without a data block lacks, and an empty
+ * repositoryUrl turns links off, which must not wipe definitions out.
+ */
+export type KeptLinks = "release without data" | "empty repositoryUrl";
 
 export type RenderOptions = {
   /** Render releases that were edited by hand, and drop those edits. */
@@ -165,6 +175,15 @@ function linksReplacement(
   throw new Error(
     `${displayPath(changelogPath(project))}: no ${LINKS_BEGIN} marker for the link definitions, add the BEGIN and END wlz:links markers or set linkFormat to ""`,
   );
+}
+
+function linksKeptBecause(
+  project: Project,
+  withoutData: number,
+): KeptLinks | undefined {
+  if (withoutData > 0) return "release without data";
+  if (linksLackRepository(project)) return "empty repositoryUrl";
+  return undefined;
 }
 
 /** Explains why releases cannot render, with a way out for hand edits. */
@@ -188,8 +207,8 @@ function renderFailure(
 
 /**
  * Plans to render every release with a data block again with the current
- * templates and configuration, and the link definitions when every release
- * has a data block. Releases without data stay as they are. A release whose
+ * templates and configuration, and the link definitions unless KeptLinks
+ * names a reason to keep them. Releases without data stay as they are. A release whose
  * notes were edited by hand stops the plan unless the options force it,
  * and so does a kind that the configuration lacks.
  */
@@ -212,8 +231,9 @@ export async function planRender(
   }
 
   const withoutData = document.releases.length - sections.length;
+  const keptLinks = linksKeptBecause(project, withoutData);
   const links =
-    withoutData === 0
+    keptLinks === undefined
       ? linksReplacement(
           project,
           document,
@@ -229,5 +249,6 @@ export async function planRender(
     content: replaceLines(document, replacements),
     rendered: sections.length,
     withoutData,
+    keptLinks,
   };
 }

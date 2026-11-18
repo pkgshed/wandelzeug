@@ -175,6 +175,14 @@ export function renderRelease(
   return renderTemplate(project.templates.release, view, partials).trim();
 }
 
+const repositoryUrlOf = (project: Project): string =>
+  project.config.repositoryUrl.replace(/\/+$/, "");
+
+/** Reports whether links are off because linkFormat needs repositoryUrl, which is empty. */
+export const linksLackRepository = (project: Project): boolean =>
+  project.templates.link.names.includes("repositoryUrl") &&
+  repositoryUrlOf(project) === "";
+
 /**
  * Renders the link definition of a release, or returns undefined when links
  * are off. Links are off with an empty linkFormat, and with a linkFormat
@@ -185,11 +193,13 @@ export function renderLink(
   values: ReleaseValues,
 ): string | undefined {
   const { link } = project.templates;
-  const repositoryUrl = project.config.repositoryUrl.replace(/\/+$/, "");
-  const lacksRepository =
-    link.names.includes("repositoryUrl") && repositoryUrl === "";
-  if (link.source.trim() === "" || lacksRepository) return undefined;
-  return renderTemplate(link, { ...values, repositoryUrl }).trim();
+  if (link.source.trim() === "" || linksLackRepository(project)) {
+    return undefined;
+  }
+  return renderTemplate(link, {
+    ...values,
+    repositoryUrl: repositoryUrlOf(project),
+  }).trim();
 }
 
 /** What a release gets as its version: an explicit version or a bump of the latest release. */

@@ -62,7 +62,7 @@ The command renders the notes of each release and the link definitions with the 
 
 The hash in the data block shows whether someone edited the notes of a release by hand. `wlz check` reports such releases, and `wlz render` refuses to overwrite them. To keep an edit, such as a typo fix, make the same edit in the data block of the release, then run `wlz render --force`, which renders over the edited notes. When a release has changes of a kind that the configuration no longer lists, both commands name the release and the kind.
 
-Releases from before data blocks keep their notes. While any release lacks a data block, `wlz render` also keeps the link definitions as they are, because a link can use the date of its release.
+Releases from before data blocks keep their notes. While any release lacks a data block, `wlz render` also keeps the link definitions as they are, because a link can use the date of its release. It keeps them as well while `repositoryUrl` is empty, so links that are off by accident don't wipe out the definitions.
 
 ## Show the notes of a release
 

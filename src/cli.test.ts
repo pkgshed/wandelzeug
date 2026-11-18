@@ -647,6 +647,19 @@ describe("command line", () => {
       expect((await run("check")).stderr).toContain(problem);
     });
 
+    test("an empty repositoryUrl keeps the link definitions", async () => {
+      await projectWithReleases();
+      await setSetting("repositoryUrl", "");
+      const before = await changelog();
+
+      expect(await run("render")).toMatchObject({
+        exitCode: 0,
+        stdout:
+          "rendered 2 releases in CHANGELOG.md\nkept the link definitions as they are, because repositoryUrl is empty\n",
+      });
+      expect(await changelog()).toBe(before);
+    });
+
     test("releases without a data block and the links stay as they are", async () => {
       await run("init", "--repository", "https://codeberg.org/o/r");
       const legacy = [

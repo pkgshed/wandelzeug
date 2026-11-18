@@ -39,7 +39,7 @@ import {
   removeFragments,
   writeRelease,
 } from "./changelog/releases.ts";
-import { planRender } from "./changelog/render.ts";
+import { planRender, type RenderPlan } from "./changelog/render.ts";
 import {
   editorCommand,
   findKeptDraft,
@@ -202,10 +202,17 @@ async function runBatch(invocation: InvocationOf<"batch">): Promise<void> {
 }
 
 /** Describes what render left as it was, if anything. */
-function keptDescription(withoutData: number): string | undefined {
-  if (withoutData === 0) return undefined;
-  const releases = countOf(withoutData, "release");
-  return `kept ${releases} without a data block and the link definitions as they are`;
+function keptDescription(plan: RenderPlan): string | undefined {
+  switch (plan.keptLinks) {
+    case undefined:
+      return undefined;
+    case "release without data": {
+      const releases = countOf(plan.withoutData, "release");
+      return `kept ${releases} without a data block and the link definitions as they are`;
+    }
+    case "empty repositoryUrl":
+      return "kept the link definitions as they are, because repositoryUrl is empty";
+  }
 }
 
 async function runRender(invocation: InvocationOf<"render">): Promise<void> {
@@ -219,7 +226,7 @@ async function runRender(invocation: InvocationOf<"render">): Promise<void> {
   await writeFile(plan.path, plan.content);
   const releases = countOf(plan.rendered, "release");
   console.log(`rendered ${releases} in ${displayPath(plan.path)}`);
-  const kept = keptDescription(plan.withoutData);
+  const kept = keptDescription(plan);
   if (kept !== undefined) console.log(kept);
 }
 
