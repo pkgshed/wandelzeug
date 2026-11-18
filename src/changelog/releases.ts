@@ -332,6 +332,8 @@ export type ReleasePlan = {
   readonly path: string;
   /** The version of the release. */
   readonly version: Version;
+  /** What templates know about the release: its name, date, tag and predecessor. */
+  readonly values: ReleaseValues;
   /** The release as the template renders it, without markers, such as for a tag message. */
   readonly notes: string;
   /** The release with its markers, and its data block when releaseData is on, as batch inserts it. */
@@ -396,6 +398,7 @@ export async function planRelease(
   return {
     path: changelogPath(project),
     version,
+    values,
     notes,
     section,
     links,

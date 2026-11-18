@@ -909,28 +909,45 @@ describe("command line", () => {
     const callsLog = () => join(helperDirectory, "calls.log");
     const messageCopy = () => join(helperDirectory, "message.md");
 
+    /** Replaces the tagHelper setting that init wrote. */
+    async function setTagHelper(yaml: string): Promise<void> {
+      const path = join(root, ".changes/config.yaml");
+      const config = await readFile(path, "utf8");
+      await writeFile(
+        path,
+        config.replace(/^tagHelper:\n(?: {2}.*\n)*/m, `${yaml}\n`),
+      );
+    }
+
     /**
      * Sets up a committed project whose tag helper is a fake: it logs its
-     * arguments, copies the tag message, and fails at the check or at the
-     * tag when FAIL_CHECK or FAIL_TAG is set.
+     * arguments with the RELEASE_NOTE variable from env, copies the tag
+     * message, and fails at the check or at the creation when FAIL_CHECK or
+     * FAIL_TAG is set.
      */
     async function projectWithFakeHelper(): Promise<void> {
       const script = join(helperDirectory, "helper.sh");
       await writeFile(
         script,
         [
-          `printf '%s\\n' "$*" >> "${callsLog()}"`,
-          'case " $* " in',
-          '  *" --dry-run "*) [ -z "$FAIL_CHECK" ] || { echo "unexpected version" >&2; exit 1; } ;;',
-          '  *) [ -z "$FAIL_TAG" ] || { echo "signing failed" >&2; exit 1; } ;;',
+          `printf '%s %s\\n' "$*" "$RELEASE_NOTE" >> "${callsLog()}"`,
+          'case "$1" in',
+          '  check) [ -z "$FAIL_CHECK" ] || { echo "unexpected version" >&2; exit 1; } ;;',
+          `  create) [ -z "$FAIL_TAG" ] || { echo "signing failed" >&2; exit 1; }; cp "$5" "${messageCopy()}" ;;`,
           "esac",
-          `while [ $# -gt 0 ]; do [ "$1" = "--message-file" ] && cp "$2" "${messageCopy()}"; shift; done`,
-          "exit 0",
           "",
         ].join("\n"),
       );
       await projectWithPackageVersion();
-      await editConfig('tagHelper: "semverkzeug"', `tagHelper: "sh ${script}"`);
+      await setTagHelper(
+        [
+          "tagHelper:",
+          `  check: [sh, "${script}", check, "{{bump}}", "{{version}}", "{{tag}}"]`,
+          `  create: [sh, "${script}", create, "{{bump}}", "{{tag}}", "{{commit}}", "{{messageFile}}"]`,
+          "  env:",
+          '    RELEASE_NOTE: "for {{tag}}"',
+        ].join("\n"),
+      );
       await run("new", "-k", "Added", "-b", "* Feature");
       await startRepository(root);
     }
@@ -947,11 +964,14 @@ describe("command line", () => {
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toMatch(/^released 0\.1\.0 in commit [0-9a-f]+\n$/);
+      const head = (await gitOutput(root, "rev-parse", "HEAD")).trim();
       const calls = await helperCalls();
       expect(calls).toHaveLength(2);
-      expect(calls[0]).toBe(`-C ${root} bump minor --expect 0.1.0 --dry-run`);
-      expect(calls[1]).toStartWith(
-        `-C ${root} bump minor --expect 0.1.0 --message-file `,
+      expect(calls[0]).toBe("check minor 0.1.0 v0.1.0 for v0.1.0");
+      expect(calls[1]).toMatch(
+        new RegExp(
+          `^create minor v0\\.1\\.0 ${head} \\S+message\\.txt for v0\\.1\\.0$`,
+        ),
       );
       expect(await readFile(messageCopy(), "utf8")).toBe(
         "release v0.1.0\n\nAdded:\n* Feature\n",
@@ -1002,24 +1022,32 @@ describe("command line", () => {
       );
     });
 
-    test("a helper that disagrees changes nothing", async () => {
+    test("a check that fails changes nothing", async () => {
       await projectWithFakeHelper();
       const result = await runWith({ FAIL_CHECK: "1" }, "release", "patch");
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("unexpected version");
+      expect(result.stderr).toContain(
+        'tag helper check: "sh" exited with status 1',
+      );
       expect(await helperCalls()).toHaveLength(1);
       expect(await headSubject()).toBe("base");
       expect(await gitOutput(root, "status", "--porcelain")).toBe("");
     });
 
-    test("a failed tag names the untagged release commit", async () => {
+    test("a failed creation names the commit, keeps the message, and shows the command", async () => {
       await projectWithFakeHelper();
       const result = await runWith({ FAIL_TAG: "1" }, "release", "patch");
 
       expect(result.exitCode).toBe(1);
-      expect(result.stderr).toMatch(
-        /The release commit [0-9a-f]+ stays untagged\. Fix the problem, then tag it, for example with "sh .*helper\.sh bump patch --expect 0\.0\.1"\./,
+      const match =
+        /The release commit [0-9a-f]+ stays untagged, and the tag message stays in (\S+message\.txt)\. Fix the problem, then tag the commit, for example with: sh \S+helper\.sh create patch v0\.0\.1 [0-9a-f]{40} \S+message\.txt/.exec(
+          result.stderr,
+        );
+      expect(match).not.toBeNull();
+      expect(await readFile(match?.[1] ?? "", "utf8")).toStartWith(
+        "release v0.0.1\n",
       );
       expect(await headSubject()).toBe("release 0.0.1");
     });
@@ -1031,10 +1059,72 @@ describe("command line", () => {
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain("<!-- END wlz:release 0.1.0 -->");
       expect(await helperCalls()).toEqual([
-        `-C ${root} bump minor --expect 0.1.0 --dry-run`,
+        "check minor 0.1.0 v0.1.0 for v0.1.0",
       ]);
       expect(await headSubject()).toBe("base");
       expect(await gitOutput(root, "status", "--porcelain")).toBe("");
+    });
+
+    /** Sets up a committed project that tags with the default, git tag. */
+    async function projectWithGitTag(): Promise<void> {
+      await run("init");
+      await run("new", "-k", "Added", "-b", "* Feature");
+      await startRepository(root);
+    }
+
+    test("by default, git creates an annotated tag with the tag message", async () => {
+      await projectWithGitTag();
+      expect((await run("release", "auto")).exitCode).toBe(0);
+
+      const tag = await gitOutput(
+        root,
+        "for-each-ref",
+        "--format=%(objecttype) %(*objectname) %(contents)",
+        "refs/tags/v0.1.0",
+      );
+      const head = (await gitOutput(root, "rev-parse", "HEAD")).trim();
+      expect(tag).toBe(`tag ${head} release v0.1.0\n\nAdded:\n* Feature\n\n`);
+    });
+
+    test("an existing tag stops the release before anything changes", async () => {
+      await projectWithGitTag();
+      await git(root, "tag", "v0.1.0");
+      const result = await run("release", "minor");
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("release: the tag v0.1.0 exists already");
+      expect(await headSubject()).toBe("base");
+    });
+
+    test("uncommitted changes to the changelog stop the release", async () => {
+      await projectWithGitTag();
+      const path = join(root, "CHANGELOG.md");
+      await writeFile(
+        path,
+        `${await readFile(path, "utf8")}\nA note by hand.\n`,
+      );
+      const result = await run("release", "minor");
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        "release: commit or undo the changes to CHANGELOG.md first",
+      );
+      expect(await headSubject()).toBe("base");
+    });
+
+    test("a check program that does not exist names itself", async () => {
+      await projectWithGitTag();
+      await setTagHelper(
+        'tagHelper:\n  check: [no-such-checker]\n  create: [git, tag, "{{tag}}"]',
+      );
+      await commitAll(root, "check with a missing program");
+      const result = await run("release", "minor");
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        'tag helper check: run "no-such-checker":',
+      );
+      expect(await headSubject()).toBe("check with a missing program");
     });
 
     test("an explicit version is a usage error", async () => {

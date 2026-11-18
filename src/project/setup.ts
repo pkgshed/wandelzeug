@@ -45,6 +45,10 @@ export const INIT_HEADER = [
 /** Formats a string as a YAML scalar. JSON strings are valid YAML. */
 const yamlString = (text: string): string => JSON.stringify(text);
 
+/** Formats strings as the items of a YAML block sequence, indented below a key. */
+const yamlItems = (texts: readonly string[], indent: string): string =>
+  texts.map((text) => `${indent}- ${yamlString(text)}`).join("\n");
+
 /**
  * The configuration that "wlz init" writes. It spells out every default,
  * and the repository URL that init found.
@@ -129,11 +133,24 @@ tagTemplate: |
 # linkFormat turns links off.
 linkFormat: ${yamlString(DEFAULT_CONFIG.linkFormat)}
 
-# Command that "wlz release" runs to tag a release, such as semverkzeug
-# (https://github.com/0x5a17ed/semverkzeug). It runs through the shell, so
-# it may carry arguments, and it must accept "bump PART" with the options
-# --expect, --message-file and --dry-run.
-tagHelper: ${yamlString(DEFAULT_CONFIG.tagHelper)}
+# How "wlz release" tags the release commit. The commands run without a
+# shell in the project root, and each argument is a Mustache template.
+# Values: those of versionFormat; bump, the part of the version that the
+# release bumps; root, the project root; message, the tag message that
+# tagTemplate renders, and messageFile, a file that holds it; and commit,
+# the release commit, which only create sees. The check, which is
+# optional, runs before anything changes, and env adds environment
+# variables to both commands. By default, git creates an annotated tag.
+# To tag with semverkzeug (https://github.com/0x5a17ed/semverkzeug), which
+# also checks that the version follows from the tags:
+#
+# tagHelper:
+#   check: [semverkzeug, -C, "{{root}}", bump, "{{bump}}", --expect, "{{version}}", --dry-run]
+#   create: [semverkzeug, -C, "{{root}}", bump, "{{bump}}", --expect, "{{version}}", --message-file, "{{messageFile}}"]
+tagHelper:
+  create:
+${yamlItems(DEFAULT_CONFIG.tagHelper.create, "    ")}
+  env: {}
 
 # Whether "batch" and "release" write a data block at the bottom of each
 # release: an HTML comment with the date and the changes of the release.

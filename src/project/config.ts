@@ -427,6 +427,55 @@ const ReplacementSchema = mapping({
   replace: text,
 });
 
+// --- The tag helper -----------------------------------------------------------
+
+/** The command that creates a tag by default: an annotated tag of git with the tag message from a file. */
+export const DEFAULT_TAG_CREATE = [
+  "git",
+  "tag",
+  "--annotate",
+  "--cleanup=whitespace",
+  "--file",
+  "{{messageFile}}",
+  "{{tag}}",
+  "{{commit}}",
+];
+
+const DEFAULT_TAG_HELPER = { create: DEFAULT_TAG_CREATE };
+
+/** A command as a list of Mustache templates, the program first. */
+const commandLine = v.pipe(
+  v.array(text, "must be a list of arguments"),
+  v.minLength(1, "must be a non-empty list of arguments"),
+);
+
+const environmentName = v.pipe(
+  v.string(),
+  v.regex(
+    /^[A-Za-z_][A-Za-z0-9_]*$/,
+    "must be letters, digits and underscores, not starting with a digit",
+  ),
+);
+
+/**
+ * The commands that tag a release, without a shell, each argument a
+ * Mustache template: an optional check that runs before anything changes,
+ * and the command that creates the tag. The environment variables apply
+ * to both.
+ */
+const TagHelperSchema = mapping(
+  {
+    check: absent(commandLine),
+    create: commandLine,
+    env: setting(
+      v.record(environmentName, text, "must map variable names to values"),
+      {},
+    ),
+  },
+  "",
+  "must be a mapping of the steps check and create, which replaced the command string of wandelzeug 0.1",
+);
+
 // --- The configuration ------------------------------------------------------
 
 /**
@@ -470,13 +519,8 @@ const ConfigSchema = v.pipe(
     tagTemplate: setting(text, DEFAULT_TAG_TEMPLATE),
     /** Mustache template for the link definition of a release. Empty turns links off. */
     linkFormat: setting(text, DEFAULT_LINK_FORMAT),
-    /**
-     * The command that "wlz release" runs to tag a release. It runs through
-     * the shell, so it may carry arguments, and it must accept the bump
-     * command of semverkzeug with its --expect, --message-file and
-     * --dry-run options.
-     */
-    tagHelper: setting(nonEmptyText, "semverkzeug"),
+    /** How "wlz release" checks and creates the tag of a release, git tag by default. */
+    tagHelper: setting(TagHelperSchema, DEFAULT_TAG_HELPER),
     /**
      * Whether "batch" and "release" write a data block at the bottom of
      * each release, which "render" needs to render the release again.
