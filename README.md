@@ -1,6 +1,16 @@
+<div align="center">
+
 # wandelzeug
 
-Changelog entries without merge conflicts. wandelzeug records each change as its own small Markdown file and turns the collected files into a release in your `CHANGELOG.md` when you ship. It follows the workflow of [changie](https://changie.dev), runs on Bun, and installs as the `wlz` command.
+**Changelog entries without merge conflicts.**
+
+[![CI](https://img.shields.io/github/actions/workflow/status/pkgshed/wandelzeug/ci.yaml?branch=main&label=CI)](https://github.com/pkgshed/wandelzeug/actions/workflows/ci.yaml) [![Version](https://img.shields.io/github/v/tag/pkgshed/wandelzeug?sort=semver&label=version)](CHANGELOG.md) [![Licence: 0BSD](https://img.shields.io/badge/licence-0BSD-blue)](LICENSE) [![Runtime: Bun](https://img.shields.io/badge/runtime-Bun-black?logo=bun)](https://bun.sh)
+
+[Features](#features) · [Install](#install) · [Get started](#get-started) · [Documentation](#documentation)
+
+</div>
+
+wandelzeug records each change as its own small Markdown file and turns the collected files into a release in your `CHANGELOG.md` when you ship. It follows the workflow of [changie](https://changie.dev), runs on Bun, and installs as the `wlz` command.
 
 ## Features
 
