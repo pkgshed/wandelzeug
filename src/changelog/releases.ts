@@ -17,7 +17,7 @@ import {
   type Templates,
   unreleasedPath,
 } from "../project/root.ts";
-import { displayPath, UsageError } from "../shared/foundations.ts";
+import { displayPath } from "../shared/foundations.ts";
 import {
   renderTemplate,
   type Template,
@@ -201,20 +201,13 @@ export type ReleaseTarget =
   | { readonly type: "version"; readonly version: Version }
   | { readonly type: "bump"; readonly bump: BumpArgument };
 
-/** Parses the version argument of "wlz batch". */
-export function parseReleaseTarget(argument: string): ReleaseTarget {
-  if (isBumpArgument(argument)) {
-    return { type: "bump", bump: argument };
+/** Parses a release target, such as "1.4.0" or "auto". It returns undefined for other text. */
+export function parseReleaseTarget(text: string): ReleaseTarget | undefined {
+  if (isBumpArgument(text)) {
+    return { type: "bump", bump: text };
   }
-
-  const version = parseVersion(argument);
-  if (version === undefined) {
-    const bumps = BUMP_ARGUMENTS.join(", ");
-    throw new UsageError(
-      `invalid version ${JSON.stringify(argument)}, expected a semantic version or one of: ${bumps}`,
-    );
-  }
-  return { type: "version", version };
+  const version = parseVersion(text);
+  return version === undefined ? undefined : { type: "version", version };
 }
 
 function resolveReleaseVersion(

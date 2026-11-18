@@ -45,7 +45,7 @@ To use a single file instead, for example to keep wandelzeug inside another repo
 
    The output is `updated CHANGELOG.md from 1 change`, and the fragment files are removed.
 
-Run `wlz --help` for every command and option.
+Run `wlz --help` for the list of commands, and `wlz COMMAND --help` for the options and arguments of one command, as in `wlz new --help`.
 
 ## Change files
 
@@ -284,7 +284,8 @@ wandelzeug keeps its own changelog with wandelzeug. To record a change that user
 
 The source lives in TypeScript modules below `src/`, grouped by concern, with each module's tests next to it:
 
-- `src/cli.ts` is the entry point and holds the commands.
+- `src/cli.ts` is the entry point and runs the commands.
+- `src/cli/` holds the command line grammar, its help text, and the value parsers for options and arguments, built with [Optique](https://optique.dev).
 - `src/shared/` holds helpers, templates, slugs, and versions.
 - `src/project/` holds the configuration, project roots, `init`, `check`, `release`, and the replacements.
 - `src/changes/` holds change files, extra fields, and the input of `new`, including its questions and drafts.

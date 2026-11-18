@@ -117,7 +117,11 @@ describe("extra fields", () => {
   test("readChangeOptions remembers keys given without a value", async () => {
     const options = await readChangeOptions(DEFAULT_CONFIG.kinds, {
       kind: "fixed",
-      meta: ["pr=7", "ticket=", "team=core"],
+      meta: [
+        ["pr", "7"],
+        ["ticket", ""],
+        [" team", " core "],
+      ],
     });
     expect(options).toEqual({
       kind: { label: "Fixed", bump: "patch" },
@@ -125,11 +129,5 @@ describe("extra fields", () => {
       metadata: { pr: 7, team: "core" },
       givenKeys: new Set(["pr", "ticket", "team"]),
     });
-  });
-
-  test("readChangeOptions rejects an option without a key", async () => {
-    await expect(
-      readChangeOptions(DEFAULT_CONFIG.kinds, { meta: ["=7"] }),
-    ).rejects.toThrow('invalid --meta "=7", expected key=value');
   });
 });

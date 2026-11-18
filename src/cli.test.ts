@@ -88,6 +88,34 @@ describe("command line", () => {
     });
   });
 
+  test("--help lists the commands", async () => {
+    const result = await run("--help");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Usage: wlz COMMAND [OPTIONS]");
+    expect(result.stdout).toMatch(/^ {2}release +Add the unreleased changes/m);
+  });
+
+  test.each([
+    [["new", "--help"]],
+    [["help", "new"]],
+    [["new", "-k", "Added", "-h"]],
+  ])("%p shows the help of new alone", async (args) => {
+    const result = await run(...args);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toStartWith(
+      "Record a change in the unreleased directory\nUsage: wlz new",
+    );
+    expect(result.stdout).toContain("-m, --meta KEY=VALUE");
+    expect(result.stdout).not.toContain("--dry-run");
+  });
+
+  test("no command is a usage error", async () => {
+    expect(await run()).toMatchObject({
+      exitCode: 2,
+      stderr: 'wlz: missing command\nRun "wlz --help" for usage.\n',
+    });
+  });
+
   test("new records a fragment from options", async () => {
     await run("init");
     const result = await run(
@@ -228,12 +256,21 @@ describe("command line", () => {
   });
 
   test.each([
-    [["frobnicate"], /unknown command "frobnicate"/],
-    [["batch"], /batch: missing <version>/],
-    [["batch", "1.0"], /invalid version "1\.0"/],
-    [["next", "huge"], /next: invalid bump "huge"/],
-    [["latest", "--nope"], /Unknown option '--nope'/],
-    [["init", "--repository", "codeberg.org/o/r"], /invalid --repository/],
+    [["frobnicate"], /Unexpected option or subcommand: `frobnicate`/],
+    [["batch"], /Expected a `VERSION`, but too few arguments/],
+    [
+      ["batch", "1.0"],
+      /`VERSION`: expected a semantic version or one of: major, minor, patch, auto, but got "1\.0"/,
+    ],
+    [
+      ["next", "huge"],
+      /`BUMP`: Expected one of "major", "minor", "patch", and "auto", but got "huge"/,
+    ],
+    [["latest", "--nope"], /Unexpected option or subcommand: `--nope`/],
+    [
+      ["init", "--repository", "codeberg.org/o/r"],
+      /`--repository`: expected an http or https address/,
+    ],
   ])("%p is a usage error", async (args, message) => {
     await run("init");
     const result = await run(...args);
@@ -435,14 +472,26 @@ describe("command line", () => {
   });
 
   test.each([
-    [["check", "--since=-x"], /invalid --since "-x"/],
-    [["merge"], /unknown command "merge"/],
-    [["show"], /show: missing <version>/],
-    [["show", "latest"], /invalid version "latest"/],
+    [
+      ["check", "--since", "-x"],
+      /`--since`: expected a git revision that does not start with -, but got "-x"/,
+    ],
+    [["relase", "minor"], /Did you mean `release`\?/],
+    [["show"], /Expected a `VERSION`, but too few arguments/],
+    [
+      ["show", "latest"],
+      /`VERSION`: expected a semantic version, but got "latest"/,
+    ],
+    [
+      ["batch", "minor", "--date", "2026-13-01"],
+      /`--date`: expected a date as YYYY-MM-DD, but got "2026-13-01"/,
+    ],
+    [["new", "-m", "pr"], /`-m`\/`--meta`: Expected "=" in "pr"/],
+    [["new", "-m", "=7"], /`-m`\/`--meta`: Expected a non-empty key in "=7"/],
     [["new", "--edit", "--body", "-"], /--body cannot read stdin/],
     [
       ["new", "--resume", "-k", "fixed"],
-      /--resume: the draft holds the change/,
+      /"--resume" and "-k" "fixed" cannot be used together/,
     ],
   ])("%p is a usage error as well", async (args, message) => {
     await run("init");
@@ -572,7 +621,9 @@ describe("command line", () => {
       const result = await run("release", "1.2.3");
 
       expect(result.exitCode).toBe(2);
-      expect(result.stderr).toContain('release: invalid bump "1.2.3"');
+      expect(result.stderr).toContain(
+        '`BUMP`: Expected one of "major", "minor", "patch", and "auto", but got "1.2.3"',
+      );
     });
   });
 });
