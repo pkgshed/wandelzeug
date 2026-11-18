@@ -146,6 +146,18 @@ describe("configuration", () => {
       { extraFields: [{ key: "pr" }, { key: "pr" }] },
       /extraFields: duplicate key "pr"/,
     ],
+    [
+      { extraFields: [{ key: "ticket", pattern: "(" }] },
+      /extraFields\[0\]\.pattern: Invalid regular expression/,
+    ],
+    [
+      { extraFields: [{ key: "notes", type: "block", pattern: "x" }] },
+      /extraFields\[0\]: unknown setting "pattern" for type block/,
+    ],
+    [
+      { extraFields: [{ key: "pr", type: "int", pattern: "x" }] },
+      /extraFields\[0\]: unknown setting "pattern" for type int/,
+    ],
     [{ releaseData: "yes" }, /releaseData: must be true or false/],
     [
       { replacements: { path: "package.json" } },

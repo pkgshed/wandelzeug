@@ -21,6 +21,10 @@ const fieldProblem = (field: ExtraField, problem: string): FieldResult => ({
   problem: `field ${JSON.stringify(field.key)} ${problem}`,
 });
 
+/** Reports whether the whole text matches a pattern. Without a pattern, any text does. */
+const matchesPattern = (pattern: string | undefined, text: string): boolean =>
+  pattern === undefined || new RegExp(`^(?:${pattern})$`).test(text);
+
 function readTextValue(
   field: ExtraFieldOf<"string" | "block">,
   value: MetadataValue,
@@ -41,6 +45,12 @@ function readTextValue(
     return fieldProblem(
       field,
       `allows at most ${field.maxLength} characters, got ${length}`,
+    );
+  }
+  if (field.type === "string" && !matchesPattern(field.pattern, text)) {
+    return fieldProblem(
+      field,
+      `must match ${field.pattern}, got ${JSON.stringify(text)}`,
     );
   }
   return fieldValue(text);

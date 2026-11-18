@@ -153,7 +153,8 @@ kinds:
 # kind. Each entry has a key, a prompt (default: the key), a type (default:
 # string), and whether it is required (default: false). The types are:
 #
-#   string  one line of text, limited by minLength and maxLength
+#   string  one line of text, limited by minLength and maxLength, and by
+#           pattern, a regular expression that the whole value must match
 #   block   several lines of text, limited by minLength and maxLength
 #   int     a whole number, limited by minInt and maxInt; "#42" counts as 42
 #   enum    one of enumOptions
@@ -170,6 +171,11 @@ kinds:
 #   - key: area
 #     type: enum
 #     enumOptions: [cli, docs, tests]
+#   - key: ticket
+#     pattern: 'FOO-\\d{1,9}'
+#
+# Write a pattern in single quotes, because YAML reads a backslash in
+# double quotes as an escape.
 extraFields: []
 `;
 

@@ -6,7 +6,7 @@
 
 import { join } from "node:path";
 import * as v from "valibot";
-import { findDuplicate } from "../shared/foundations.ts";
+import { attempt, findDuplicate } from "../shared/foundations.ts";
 import { isFieldName } from "../shared/templates.ts";
 import { BUMPS } from "../shared/versions.ts";
 
@@ -202,19 +202,42 @@ const commonFieldEntries = {
   required: setting(v.boolean("must be true or false"), false),
 };
 
-const textField = <const Type extends "string" | "block">(
-  type: v.GenericSchema<Type | undefined, Type>,
-  name: Type,
-) =>
-  mapping(
-    {
-      ...commonFieldEntries,
-      type,
-      minLength: lengthLimit,
-      maxLength: lengthLimit,
-    },
-    ` for type ${name}`,
-  );
+/** Describes why a regular expression does not compile, if it does not. */
+function regExpProblem(source: string): string | undefined {
+  const compiled = attempt(() => new RegExp(source));
+  return compiled.ok ? undefined : compiled.error;
+}
+
+/** A regular expression in JavaScript syntax that a whole value must match. */
+const patternText = v.pipe(
+  v.string("must be a regular expression"),
+  v.nonEmpty("must be a non-empty regular expression"),
+  v.check(
+    (source) => regExpProblem(source) === undefined,
+    (issue) => regExpProblem(String(issue.input)) ?? "",
+  ),
+);
+
+const stringField = mapping(
+  {
+    ...commonFieldEntries,
+    type: v.optional(v.literal("string"), "string"),
+    minLength: lengthLimit,
+    maxLength: lengthLimit,
+    pattern: absent(patternText),
+  },
+  " for type string",
+);
+
+const blockField = mapping(
+  {
+    ...commonFieldEntries,
+    type: v.literal("block"),
+    minLength: lengthLimit,
+    maxLength: lengthLimit,
+  },
+  " for type block",
+);
 
 const intField = mapping(
   {
@@ -273,13 +296,7 @@ const enumField = <const Type extends "enum" | "enums">(type: Type) =>
 /** The extra field settings by type. Without a type, a field holds a string. */
 const FieldSettingsSchema = v.variant(
   "type",
-  [
-    textField(v.optional(v.literal("string"), "string"), "string"),
-    textField(v.literal("block"), "block"),
-    intField,
-    enumField("enum"),
-    enumField("enums"),
-  ],
+  [stringField, blockField, intField, enumField("enum"), enumField("enums")],
   `must be one of: ${FIELD_TYPES.join(", ")}`,
 );
 

@@ -32,7 +32,7 @@ The types and their settings follow changie's custom choices:
 
 | Type | Value | Settings |
 |------|-------|----------|
-| `string` | One line of text | `minLength`, `maxLength` |
+| `string` | One line of text | `minLength`, `maxLength`, `pattern` |
 | `block` | Several lines of text, written as a literal block | `minLength`, `maxLength` |
 | `int` | A whole number. `#42` and `!42` count as `42`, the way GitHub and GitLab write pull and merge request numbers. | `minInt`, `maxInt` |
 | `enum` | One of the options, matched without regard to case | `enumOptions` |
@@ -51,6 +51,8 @@ extraFields:
     type: enum
     enumOptions: [cli, docs, tests]
 ```
+
+A `pattern` is a JavaScript regular expression that the whole value must match, such as `'FOO-\d{1,9}'` for a ticket of a Jira project. Write it in single quotes, because YAML reads a backslash in double quotes as an escape.
 
 `new` checks the values after the questions or after the editor closes, and `check` checks them again. Without a terminal, `new` fails when a required field is missing. To leave an optional field empty without a question, pass the key with an empty value, such as `--meta area=`.
 

@@ -25,6 +25,7 @@ describe("extra fields", () => {
   const offsetField = extraField({ key: "offset", type: "int" });
   const nameField = extraField({ key: "name", minLength: 2, maxLength: 5 });
   const notesField = extraField({ key: "notes", type: "block" });
+  const ticketField = extraField({ key: "ticket", pattern: "FOO-\\d{1,9}" });
   const areaField = extraField({
     key: "area",
     type: "enum",
@@ -44,6 +45,7 @@ describe("extra fields", () => {
       type: "string",
       minLength: undefined,
       maxLength: undefined,
+      pattern: undefined,
     });
   });
 
@@ -63,6 +65,7 @@ describe("extra fields", () => {
       { notes: "line one\nline two\n" },
       { notes: "line one\nline two" },
     ],
+    [ticketField, { ticket: " FOO-1234 " }, { ticket: "FOO-1234" }],
     [areaField, { area: "Docs" }, { area: "docs" }],
     [areasField, { areas: "tests, CLI" }, { areas: "cli, tests" }],
     [areasField, { areas: "docs,docs" }, { areas: "docs" }],
@@ -97,6 +100,16 @@ describe("extra fields", () => {
       nameField,
       { name: "a\nb" },
       'field "name" must be a single line, type block allows more',
+    ],
+    [
+      ticketField,
+      { ticket: "BAR-1" },
+      'field "ticket" must match FOO-\\d{1,9}, got "BAR-1"',
+    ],
+    [
+      ticketField,
+      { ticket: "xFOO-1" },
+      'field "ticket" must match FOO-\\d{1,9}, got "xFOO-1"',
     ],
     [
       areaField,
