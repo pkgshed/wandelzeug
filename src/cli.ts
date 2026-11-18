@@ -71,6 +71,7 @@ import {
   errorMessage,
   UsageError,
 } from "./shared/foundations.ts";
+import { supportsColor } from "./shared/terminal.ts";
 import { compareVersions, formatVersion, today } from "./shared/versions.ts";
 
 /** Opens the project at or above the directory that -C names, or the working directory. */
@@ -297,7 +298,9 @@ function reportError(error: unknown): number {
 /** Runs the command line and returns the exit status. */
 export async function main(argv: readonly string[]): Promise<number> {
   try {
-    const commandLine = readCommandLine(argv);
+    const commandLine = readCommandLine(argv, {
+      colors: supportsColor(process.stdout.isTTY === true, process.env),
+    });
     if (commandLine.action === "exit") return commandLine.status;
     await runInvocation(commandLine.invocation);
     return 0;

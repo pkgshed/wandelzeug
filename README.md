@@ -45,7 +45,7 @@ To use a single file instead, for example to keep wandelzeug inside another repo
 
    The output is `updated CHANGELOG.md from 1 change`, and the fragment files are removed.
 
-Run `wlz --help` for the list of commands, and `wlz COMMAND --help` for the options and arguments of one command, as in `wlz new --help`.
+Run `wlz --help` for the list of commands, and `wlz COMMAND --help` for the options and arguments of one command, as in `wlz new --help`. On a terminal, the help uses colours. To turn them off, set `NO_COLOR`. To keep them in a pipe, set `FORCE_COLOR`.
 
 ## Change files
 

@@ -31,7 +31,8 @@ describe("command line", () => {
   async function runWith(env: Record<string, string>, ...args: string[]) {
     const child = Bun.spawn([process.execPath, SCRIPT, ...args], {
       cwd: root,
-      env: { ...GIT_ENV, VISUAL: "", EDITOR: "", ...env },
+      // FORCE_COLOR=0 keeps colours out of the output, whatever the shell sets.
+      env: { ...GIT_ENV, VISUAL: "", EDITOR: "", FORCE_COLOR: "0", ...env },
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
@@ -107,6 +108,15 @@ describe("command line", () => {
     );
     expect(result.stdout).toContain("-m, --meta KEY=VALUE");
     expect(result.stdout).not.toContain("--dry-run");
+  });
+
+  test("help takes colours where they are wanted", async () => {
+    const plain = await run("release", "--help");
+    expect(plain.stdout).not.toContain("\x1b[");
+
+    const coloured = await runWith({ FORCE_COLOR: "1" }, "release", "--help");
+    expect(coloured.exitCode).toBe(0);
+    expect(coloured.stdout).toContain("\x1b[3m--dry-run\x1b[0m");
   });
 
   test("no command is a usage error", async () => {

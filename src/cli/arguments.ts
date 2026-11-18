@@ -275,7 +275,11 @@ const showOutput = (status: number): never => {
   throw new ShownOutput(status);
 };
 
-/** Turns a parse failure into a usage error, which the entry point reports. */
+/**
+ * Turns a parse failure into a usage error, which the entry point reports.
+ * The message stays plain text: Bun prints console.error output in red on
+ * a terminal, and the resets of Optique's colours would cut that red short.
+ */
 const rejectUsage = (_status: number, error: Message): never => {
   throw new UsageError(formatMessage(error));
 };
@@ -285,13 +289,23 @@ const HELP_BRIEF = message`Records changes as Markdown files with YAML front mat
 /** Shown on the top-level help page only. Commands have descriptions of their own. */
 const HELP_DESCRIPTION = message`Run ${commandLine("wlz COMMAND --help")} for the options and arguments of a command.`;
 
+/** How readCommandLine prints help output. */
+export type HelpOutput = {
+  /** Whether the help on stdout may carry the colours of Optique's default theme. */
+  readonly colors: boolean;
+};
+
 /**
  * Parses the arguments of wlz. Help and version requests print their
  * output and yield an exit. Invalid arguments throw a UsageError.
  */
-export function readCommandLine(argv: readonly string[]): CommandLine {
+export function readCommandLine(
+  argv: readonly string[],
+  output: HelpOutput,
+): CommandLine {
   try {
     const invocation = runParserSync(WLZ, "wlz", argv, {
+      colors: output.colors,
       brief: HELP_BRIEF,
       description: HELP_DESCRIPTION,
       usageLine: [
