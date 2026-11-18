@@ -45,7 +45,7 @@ import {
 import { notesHash, type ReleaseData } from "./data.ts";
 import {
   type ChangelogDocument,
-  definedLabels,
+  linkDefinitions,
   insertRelease,
   knownReleases,
   LINKS_BEGIN,
@@ -320,7 +320,11 @@ function newLinks(
   references: readonly Reference[],
 ): string[] {
   const link = renderLink(project, values);
-  const defined = new Set(definedLabels(document).map(normalizeLabel));
+  const defined = new Set(
+    linkDefinitions(document).map((definition) =>
+      normalizeLabel(definition.label),
+    ),
+  );
   const definitions = references
     .filter((reference) => !defined.has(normalizeLabel(reference.label)))
     .map(definitionLine);

@@ -69,7 +69,7 @@ To print the notes of one release, for example for the description of a release 
 wlz show 1.6.0
 ```
 
-The output is the text between the release's markers, including its heading.
+The output is the text between the release's markers, including its heading, followed by the link definitions that the notes use. These include the link of the version in the heading, so the links also work in the description of a GitHub release.
 
 ## Links
 

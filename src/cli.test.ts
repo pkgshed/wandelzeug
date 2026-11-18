@@ -770,7 +770,7 @@ describe("command line", () => {
       expect(await changelog()).toBe(text);
     });
 
-    test("show appends the definitions of its own references", async () => {
+    test("show appends the definitions that its notes use, the release link first", async () => {
       await projectWithLinks();
       await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1]", "-m", "pr=42");
       await run("batch", "minor", "--date", "2026-11-17");
@@ -783,6 +783,7 @@ describe("command line", () => {
           "",
           "* Fixes [FOO-1] ([#42])",
           "",
+          "[`0.1.0`]: https://github.com/o/r/releases/tag/v0.1.0",
           "[FOO-1]: https://jira.corp.com/browse/FOO-1",
           "[#42]: https://github.com/o/r/pull/42",
           "",

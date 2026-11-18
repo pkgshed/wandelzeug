@@ -4,7 +4,7 @@ import { notesHash, type ReleaseData } from "./data.ts";
 import {
   anchorMarker,
   dataComment,
-  definedLabels,
+  linkDefinitions,
   insertRelease,
   knownReleases,
   LINKS_BEGIN,
@@ -177,7 +177,7 @@ describe("changelog markers", () => {
     ).toThrow("no <!-- BEGIN wlz:links --> marker for the link definitions");
   });
 
-  test("definedLabels lists the labels between the link markers", () => {
+  test("linkDefinitions lists the definitions between the link markers", () => {
     const text = [
       anchor,
       "[outside]: x",
@@ -186,9 +186,9 @@ describe("changelog markers", () => {
       "[FOO-1]: b",
       LINKS_END,
     ];
-    expect(definedLabels(changelogDocument(text.join("\n")))).toEqual([
-      "`1.0.0`",
-      "FOO-1",
+    expect(linkDefinitions(changelogDocument(text.join("\n")))).toEqual([
+      { label: "`1.0.0`", line: "[`1.0.0`]: a" },
+      { label: "FOO-1", line: "[FOO-1]: b" },
     ]);
   });
 

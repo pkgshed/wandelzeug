@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { parseTemplate } from "../shared/templates.ts";
 import { projectWith } from "../test-helpers.ts";
-import {
-  findReferences,
-  labelRecognizer,
-  withDefinitions,
-} from "./references.ts";
+import { findReferences, labelRecognizer } from "./references.ts";
 
 describe("references", () => {
   const project = projectWith({
@@ -81,22 +77,5 @@ describe("references", () => {
       extraFields: [{ key: "issue", pattern: "FOO-\\d+" }],
     });
     expect(findReferences(plain, "* [FOO-1]")).toEqual([]);
-  });
-
-  test("withDefinitions appends the definitions after a blank line", () => {
-    const references = findReferences(project, "* [FOO-1] and [#42]");
-    expect(
-      withDefinitions("## 1.0.0\n\n* [FOO-1] and [#42]\n", references),
-    ).toBe(
-      [
-        "## 1.0.0",
-        "",
-        "* [FOO-1] and [#42]",
-        "",
-        "[FOO-1]: https://jira.corp.com/browse/FOO-1",
-        "[#42]: https://github.com/o/r/pull/42",
-      ].join("\n"),
-    );
-    expect(withDefinitions("## 1.0.0\n", [])).toBe("## 1.0.0\n");
   });
 });

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { bracketedLabels, listItems, markdownBlocks } from "./markdown.ts";
+import {
+  bracketedLabels,
+  listItems,
+  markdownBlocks,
+  referencedLabels,
+} from "./markdown.ts";
 
 describe("markdown blocks", () => {
   test("blocks know their lines and keep the source of list items", () => {
@@ -78,5 +83,27 @@ describe("markdown blocks", () => {
       "```",
     ].join("\n");
     expect(bracketedLabels(markdown)).toEqual(["FOO-1", "FOO-2", "#42"]);
+  });
+
+  test("referencedLabels finds the references that resolve to a definition", () => {
+    const notes = [
+      "## [`0.2.0`] (2026-11-18)",
+      "",
+      "* Fixes [FOO-1], [the bug][FOO-2], and [FOO-3][]",
+      "* Not `[FOO-1]`, [FOO-4](https://x), \\[FOO-1\\], or [unknown]",
+    ].join("\n");
+    const definitions = [
+      "[`0.2.0`]: https://a",
+      "[FOO-1]: https://b",
+      "[FOO-2]: https://c",
+      "[FOO-3]: https://d",
+      "[FOO-4]: https://e",
+    ];
+    expect(referencedLabels(notes, definitions)).toEqual([
+      "`0.2.0`",
+      "FOO-1",
+      "FOO-2",
+      "FOO-3",
+    ]);
   });
 });
