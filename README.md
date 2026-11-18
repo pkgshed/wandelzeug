@@ -10,7 +10,7 @@
 
 </div>
 
-wandelzeug records each change as its own small Markdown file and turns the collected files into a release in your `CHANGELOG.md` when you ship. It follows the workflow of [changie](https://changie.dev), runs on Bun, and installs as the `wlz` command.
+wandelzeug records each change as its own small Markdown file and turns the collected files into a release in your `CHANGELOG.md` when you ship. It runs on Bun and installs as the `wlz` command.
 
 ## Features
 
@@ -80,6 +80,15 @@ To keep wandelzeug inside another repository instead, download the single execut
 - [The changelog](docs/changelog.md) covers the markers, links, templates, and adopting an existing changelog.
 - [Releases](docs/releases.md) covers versions, releasing and tagging, version numbers in other files, and monorepos.
 - [Shell completion](docs/completion.md) covers installing the completion script for each shell.
+
+## Prior art
+
+wandelzeug builds on ideas from other changelog tools:
+
+- [changie](https://changie.dev) inspired wandelzeug in the first place, with a file per change in an unreleased directory, kinds, and custom choices, which a release turns into a section of the changelog.
+- [git-cliff](https://git-cliff.org) generates a changelog from the commit history, through conventional commits and templates. wandelzeug takes the other road and records changes in files that people write.
+- [towncrier](https://towncrier.readthedocs.io) collects news fragments in a directory and assembles them into the changelog at release time.
+- [Changesets](https://github.com/changesets/changesets) keeps a Markdown file with front matter for each change and turns these files into version bumps and changelogs, with a focus on monorepos.
 
 ## Contributing
 
