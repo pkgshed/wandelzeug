@@ -1,7 +1,7 @@
 /**
  * Importing releases that lack a data block: "wlz import" and
  * "wlz init --import". Releases from before wandelzeug, and marked releases
- * from before data blocks, get a data block when their Markdown has the
+ * without a data block, get a data block when their Markdown has the
  * shape that wandelzeug renders: a heading with the version and a date, a
  * heading for each kind, and lists below those. Their notes stay as they
  * are, and the hash covers the original text. The import stops at the
@@ -20,9 +20,10 @@ import {
 import { notesHash } from "./data.ts";
 import {
   anchorMarker,
+  beginMarker,
   type ChangelogDocument,
   currentNotes,
-  dataBeginMarker,
+  dataComment,
   endMarker,
   type LineReplacement,
   type Release,
@@ -144,13 +145,15 @@ type Candidate = {
   readonly convert: () => Fit<LineReplacement>;
 };
 
-/** Gives a marked release a data block in its BEGIN marker, which so far holds none. */
+/** Gives a marked release without a data block one, right before its END marker. */
 function convertMarked(
   document: ChangelogDocument,
   section: ReleaseSection,
   kinds: readonly Kind[],
 ): Fit<LineReplacement> {
-  const notes = document.lines.slice(section.notes, section.end).join("\n");
+  const notes = document.lines
+    .slice(section.begin + 1, section.notesEnd)
+    .join("\n");
   const [heading, ...blocks] = markdownBlocks(notes);
   const named =
     heading?.type === "heading" ? headingRelease(heading) : undefined;
@@ -167,9 +170,9 @@ function convertMarked(
   if (!content.fits) return misfit(content.reason);
   const hash = notesHash(currentNotes(document, section));
   return fit({
-    start: section.begin,
-    end: section.begin,
-    lines: dataBeginMarker(section.name, { ...content.value, hash }),
+    start: section.end,
+    end: section.end - 1,
+    lines: dataComment({ ...content.value, hash }),
   });
 }
 
@@ -280,8 +283,9 @@ function convertLegacy(
     start: legacy.first,
     end: legacy.last,
     lines: [
-      ...dataBeginMarker(release.name, { ...content.value, hash }),
+      beginMarker(release.name),
       ...notes,
+      ...dataComment({ ...content.value, hash }),
       endMarker(release.name),
     ],
   });

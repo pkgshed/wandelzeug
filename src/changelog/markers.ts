@@ -1,7 +1,7 @@
 /**
  * The markers in the changelog: the release anchor, the BEGIN and END pair
- * around each release with its data block, and the BEGIN and END pair
- * around the link definitions of the releases.
+ * around each release, the data block at the bottom of a release, and the
+ * BEGIN and END pair around the link definitions of the releases.
  */
 
 import { changelogPath, type Project } from "../project/root.ts";
@@ -9,6 +9,7 @@ import {
   attempt,
   displayPath,
   readOptionalFile,
+  withContext,
 } from "../shared/foundations.ts";
 import {
   compareVersions,
@@ -29,13 +30,13 @@ export type Release = {
 
 /** A release that the changelog wraps in BEGIN and END markers. */
 export type ReleaseSection = Release & {
-  /** The index of the BEGIN line. */
+  /** The index of the BEGIN line. The notes start on the line after it. */
   readonly begin: number;
-  /** The index of the first line of the notes, after the BEGIN marker and its data block. */
-  readonly notes: number;
+  /** The index of the line after the notes: the first line of the data block, or the END line. */
+  readonly notesEnd: number;
   /** The index of the END line. */
   readonly end: number;
-  /** The data block, which releases from before data blocks lack. */
+  /** The data block, which releases without embedded data lack. */
   readonly data: ReleaseData | undefined;
 };
 
@@ -71,38 +72,46 @@ export const LINKS_BEGIN = "<!-- BEGIN wlz:links -->";
 /** The marker that ends the link definitions of wandelzeug. Definitions below it belong to the project. */
 export const LINKS_END = "<!-- END wlz:links -->";
 
-/** The BEGIN marker of a release without a data block. */
 export const beginMarker = (name: string): string =>
   `<!-- BEGIN wlz:release ${name} -->`;
 
 export const endMarker = (name: string): string =>
   `<!-- END wlz:release ${name} -->`;
 
+/** The line that opens the comment of a data block. */
+const DATA_BEGIN = "<!-- wlz:data";
+
 /** The line that closes the comment of a data block. */
 const DATA_END = "-->";
 
-/** Formats the lines of a BEGIN marker that holds the data block of a release. */
-export const dataBeginMarker = (name: string, data: ReleaseData): string[] => [
-  `<!-- BEGIN wlz:release ${name}`,
+/** Formats the comment that holds the data block of a release. */
+export const dataComment = (data: ReleaseData): string[] => [
+  DATA_BEGIN,
   ...formatReleaseData(data),
   DATA_END,
 ];
 
 /**
- * Formats a release as batch inserts it: the BEGIN marker that holds the
- * data block, the notes, and the END marker.
+ * Formats a release as batch inserts it: the BEGIN marker, the notes, the
+ * data block if there is one, and the END marker. The data block comes
+ * last, so a reader of the file meets the notes first.
  */
 export const releaseSection = (
   name: string,
-  data: ReleaseData,
+  data: ReleaseData | undefined,
   notes: string,
 ): string =>
-  [...dataBeginMarker(name, data), notes, endMarker(name)].join("\n");
+  [
+    beginMarker(name),
+    notes,
+    ...(data === undefined ? [] : dataComment(data)),
+    endMarker(name),
+  ].join("\n");
 
 const ANCHOR_MARKER = /^<!--\s*wlz:releases\b(.*?)-->$/;
 const BEGIN_MARKER = /^<!--\s*BEGIN\s+wlz:release\s+(\S+)\s*-->$/;
-/** A BEGIN marker whose comment goes on with a data block. */
-const BEGIN_WITH_DATA = /^<!--\s*BEGIN\s+wlz:release\s+(\S+)\s*$/;
+/** The first line of a data block, whose comment goes on for several lines. */
+const DATA_MARKER = /^<!--\s*wlz:data\s*$/;
 const END_MARKER = /^<!--\s*END\s+wlz:release\s+(\S+)\s*-->$/;
 const LINKS_BEGIN_MARKER = /^<!--\s*BEGIN\s+wlz:links\s*-->$/;
 const LINKS_END_MARKER = /^<!--\s*END\s+wlz:links\s*-->$/;
@@ -114,7 +123,8 @@ const ANY_MARKER = /^<!--\s*(?:BEGIN\s+|END\s+)?wlz:/;
 
 type Marker =
   | { readonly type: "anchor"; readonly attributes: string }
-  | { readonly type: "begin"; readonly name: string; readonly hasData: boolean }
+  | { readonly type: "begin"; readonly name: string }
+  | { readonly type: "data" }
   | { readonly type: "end"; readonly name: string }
   | { readonly type: "linksBegin" }
   | { readonly type: "linksEnd" }
@@ -129,12 +139,8 @@ function classifyLine(line: string): Marker | undefined {
   }
 
   const begin = BEGIN_MARKER.exec(text)?.[1];
-  if (begin !== undefined)
-    return { type: "begin", name: begin, hasData: false };
-  const withData = BEGIN_WITH_DATA.exec(text)?.[1];
-  if (withData !== undefined) {
-    return { type: "begin", name: withData, hasData: true };
-  }
+  if (begin !== undefined) return { type: "begin", name: begin };
+  if (DATA_MARKER.test(text)) return { type: "data" };
   const end = END_MARKER.exec(text)?.[1];
   if (end !== undefined) return { type: "end", name: end };
   if (LINKS_BEGIN_MARKER.test(text)) return { type: "linksBegin" };
@@ -180,8 +186,9 @@ function parseAnchorBaseline(attributes: string): Release | undefined {
 type OpenRelease = {
   readonly release: Release;
   readonly begin: number;
-  readonly notes: number;
   readonly data: ReleaseData | undefined;
+  /** The index of the first line of the data block, once the scan has seen it. */
+  readonly dataBegin: number | undefined;
 };
 
 /** What the scan of a changelog has seen so far. */
@@ -235,13 +242,7 @@ function scanLinksEnd(scan: ChangelogScan, index: number): void {
   scan.linksBegin = undefined;
 }
 
-function scanBegin(
-  scan: ChangelogScan,
-  name: string,
-  begin: number,
-  notes: number,
-  data: ReleaseData | undefined,
-): void {
+function scanBegin(scan: ChangelogScan, name: string, begin: number): void {
   if (scan.open !== undefined) {
     throw new Error(
       `BEGIN of ${name} inside release ${scan.open.release.name}, which lacks its END`,
@@ -260,7 +261,7 @@ function scanBegin(
       `release ${name} appears twice, first on line ${duplicate.begin + 1}`,
     );
   }
-  scan.open = { release, begin, notes, data };
+  scan.open = { release, begin, data: undefined, dataBegin: undefined };
 }
 
 function scanEnd(scan: ChangelogScan, name: string, index: number): void {
@@ -274,7 +275,7 @@ function scanEnd(scan: ChangelogScan, name: string, index: number): void {
   scan.releases.push({
     ...open.release,
     begin: open.begin,
-    notes: open.notes,
+    notesEnd: open.dataBegin ?? index,
     end: index,
     data: open.data,
   });
@@ -283,13 +284,17 @@ function scanEnd(scan: ChangelogScan, name: string, index: number): void {
 
 const OLD_LINKS_MIGRATION = `the links anchor of wandelzeug 0.1 is now a pair of markers: replace this line with ${LINKS_BEGIN}, and put ${LINKS_END} after the link definitions that wandelzeug added`;
 
-/** Scans a marker that fits on its line, which every marker but a BEGIN with a data block does. */
-function scanMarker(scan: ChangelogScan, marker: Marker, index: number): void {
+/** Scans a marker that fits on its line, which every marker but a data block does. */
+function scanMarker(
+  scan: ChangelogScan,
+  marker: Exclude<Marker, { type: "data" }>,
+  index: number,
+): void {
   switch (marker.type) {
     case "anchor":
       return scanAnchor(scan, marker.attributes, index);
     case "begin":
-      return scanBegin(scan, marker.name, index, index + 1, undefined);
+      return scanBegin(scan, marker.name, index);
     case "end":
       return scanEnd(scan, marker.name, index);
     case "linksBegin":
@@ -305,37 +310,63 @@ function scanMarker(scan: ChangelogScan, marker: Marker, index: number): void {
   }
 }
 
+/** Gives the open release the data block that starts and ends on the given lines. */
+function openData(
+  scan: ChangelogScan,
+  yaml: string,
+  dataBegin: number,
+): OpenRelease {
+  const open = scan.open;
+  if (open === undefined) {
+    throw new Error("data block outside a release");
+  }
+  if (open.dataBegin !== undefined) {
+    throw new Error(`second data block in release ${open.release.name}`);
+  }
+  const data = withContext(`release ${open.release.name}`, () =>
+    parseReleaseData(yaml),
+  );
+  scan.open = { ...open, data, dataBegin };
+  return scan.open;
+}
+
 /**
- * Scans a BEGIN marker whose comment holds a data block, up to the line
- * that closes the comment, and returns the index of the line after it.
- * Without that line, the rest of the file belongs to the comment.
+ * Scans a data block, up to the line that closes its comment, and returns
+ * the index of the line after it. Without that line, the rest of the file
+ * belongs to the comment. Only blank lines may follow the block before the
+ * END marker, so the notes stay in one piece.
  */
-function scanBeginWithData(
+function scanData(
   scan: ChangelogScan,
   problems: string[],
-  name: string,
   lines: readonly string[],
-  begin: number,
+  start: number,
 ): number {
   const close = lines.findIndex(
-    (line, index) => index > begin && line.trim() === DATA_END,
+    (line, index) => index > start && line.trim() === DATA_END,
   );
   if (close === -1) {
     problems.push(
-      `line ${begin + 1}: the data block of release ${name} lacks its closing ${DATA_END} line`,
+      `line ${start + 1}: the data block lacks its closing ${DATA_END} line`,
     );
     return lines.length;
   }
 
-  const yaml = lines.slice(begin + 1, close).join("\n");
-  const data = attempt(() => parseReleaseData(yaml));
-  if (!data.ok) {
-    problems.push(`line ${begin + 1}: release ${name}: ${data.error}`);
+  const yaml = lines.slice(start + 1, close).join("\n");
+  const opened = attempt(() => openData(scan, yaml, start));
+  if (!opened.ok) {
+    problems.push(`line ${start + 1}: ${opened.error}`);
+    return close + 1;
   }
-  const opened = attempt(() =>
-    scanBegin(scan, name, begin, close + 1, data.ok ? data.value : undefined),
+  const next = lines.findIndex(
+    (line, index) => index > close && line.trim() !== "",
   );
-  if (!opened.ok) problems.push(`line ${begin + 1}: ${opened.error}`);
+  const isLast = classifyLine(lines[next] ?? "")?.type === "end";
+  if (!isLast) {
+    problems.push(
+      `line ${start + 1}: the data block of release ${opened.value.release.name} must come right before its END marker`,
+    );
+  }
   return close + 1;
 }
 
@@ -348,9 +379,7 @@ function scanLine(
 ): number {
   const marker = classifyLine(lines[index] ?? "");
   if (marker === undefined) return index + 1;
-  if (marker.type === "begin" && marker.hasData) {
-    return scanBeginWithData(scan, problems, marker.name, lines, index);
-  }
+  if (marker.type === "data") return scanData(scan, problems, lines, index);
   const result = attempt(() => scanMarker(scan, marker, index));
   if (!result.ok) problems.push(`line ${index + 1}: ${result.error}`);
   return index + 1;
@@ -449,7 +478,11 @@ export function releaseNotes(
 export const currentNotes = (
   document: ChangelogDocument,
   section: ReleaseSection,
-): string => document.lines.slice(section.notes, section.end).join("\n").trim();
+): string =>
+  document.lines
+    .slice(section.begin + 1, section.notesEnd)
+    .join("\n")
+    .trim();
 
 /** Inserts a link definition right below the BEGIN wlz:links marker, so the newest link comes first. */
 function insertLink(

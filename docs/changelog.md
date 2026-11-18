@@ -15,7 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 <!-- wlz:releases baseline=1.4.2 -->
 
-<!-- BEGIN wlz:release 1.6.0
+<!-- BEGIN wlz:release 1.6.0 -->
+## [`1.6.0`] (2026-11-17)
+
+### Added
+
+* Support for TOML config
+<!-- wlz:data
 date: 2026-11-17
 hash: h1:wohGM1AA3aJY2u5jLXV2KA==
 changes:
@@ -23,16 +29,9 @@ changes:
     pr: 42
     body: "* Support for TOML config"
 -->
-## [`1.6.0`] (2026-11-17)
-
-### Added
-
-* Support for TOML config
 <!-- END wlz:release 1.6.0 -->
 
-<!-- BEGIN wlz:release 1.5.0
-...
--->
+<!-- BEGIN wlz:release 1.5.0 -->
 ...
 <!-- END wlz:release 1.5.0 -->
 
@@ -48,7 +47,7 @@ Older history from before wandelzeug.
 
 The anchor `<!-- wlz:releases -->` marks where releases go: `batch` inserts each new release directly below it, so the newest release comes first. Each release sits between `BEGIN` and `END` markers that name its version, which is how `latest`, `next`, and `show` find releases without parsing headings. The changelog changes only when you release, so branches don't conflict over it. The header above the anchor is yours, and `init` writes the one shown here into a new changelog.
 
-The `BEGIN` marker of a release holds its data block: the date, the changes as their change files had them, and a hash of the notes as wandelzeug rendered them. The `wlz:links` markers enclose the link definitions that wandelzeug manages. Definitions outside them belong to you.
+The `wlz:data` comment at the bottom of a release is its data block: the date, the changes as their change files had them, and a hash of the notes as wandelzeug rendered them. It lets `wlz render` render the release again. The `wlz:links` markers enclose the link definitions that wandelzeug manages. Definitions outside them belong to you.
 
 ## Render past releases again
 

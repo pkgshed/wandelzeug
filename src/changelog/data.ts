@@ -2,8 +2,8 @@
  * The data block of a release: what "wlz render" needs to render the
  * release again after a template changed. It holds the date and the
  * changes of the release, and a hash of the notes as wandelzeug last
- * rendered them, which reveals edits by hand. The block is YAML inside the
- * BEGIN marker of the release, an HTML comment that Markdown viewers hide.
+ * rendered them, which reveals edits by hand. The block is YAML in an HTML
+ * comment at the bottom of the release, which Markdown viewers hide.
  */
 
 import { createHash } from "node:crypto";

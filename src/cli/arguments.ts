@@ -231,7 +231,7 @@ const renderCommand = command(
   }),
   {
     brief: message`Render the releases in the changelog again`,
-    description: message`Renders every release from its data block with the current templates and configuration, and the link definitions when every release has a data block. A release whose notes were edited by hand stops the command, unless you pass ${optionName("--force")}. Releases from before data blocks stay as they are.`,
+    description: message`Renders every release from its data block with the current templates and configuration, and the link definitions when every release has a data block. A release whose notes were edited by hand stops the command, unless you pass ${optionName("--force")}. Releases without a data block stay as they are.`,
   },
 );
 

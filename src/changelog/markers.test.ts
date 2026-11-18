@@ -3,6 +3,7 @@ import { changelogDocument, isoDate, version } from "../test-helpers.ts";
 import { notesHash, type ReleaseData } from "./data.ts";
 import {
   anchorMarker,
+  dataComment,
   insertRelease,
   knownReleases,
   LINKS_BEGIN,
@@ -184,10 +185,22 @@ describe("changelog markers", () => {
     };
     const withData = [anchor, "", releaseSection("1.0.0", data, notes), ""];
 
-    test("parseChangelog reads the data block in the BEGIN marker", () => {
+    test("parseChangelog reads the data block at the bottom of a release", () => {
       const [section] = changelogDocument(withData.join("\n")).releases;
-      expect(section).toMatchObject({ name: "1.0.0", begin: 2, notes: 10 });
+      expect(section).toMatchObject({
+        name: "1.0.0",
+        begin: 2,
+        notesEnd: 8,
+        end: 16,
+      });
       expect(section?.data).toEqual(data);
+    });
+
+    test("a release without data has no data block", () => {
+      const section = releaseSection("1.0.0", undefined, notes);
+      expect(section).toBe(`${begin("1.0.0")}\n${notes}\n${end("1.0.0")}`);
+      const [parsed] = changelogDocument([anchor, section].join("\n")).releases;
+      expect(parsed).toMatchObject({ notesEnd: 7, end: 7, data: undefined });
     });
 
     test("releaseNotes leaves out the data block", () => {
@@ -203,60 +216,95 @@ describe("changelog markers", () => {
       const section = releaseSection("1.0.0", tricky, notes);
       expect(
         section.split("\n").filter((line) => line.includes("-->")),
-      ).toEqual(["-->", "<!-- END wlz:release 1.0.0 -->"]);
+      ).toEqual([begin("1.0.0"), "-->", "<!-- END wlz:release 1.0.0 -->"]);
       const [parsed] = changelogDocument([anchor, section].join("\n")).releases;
       expect(parsed?.data?.changes[0]?.body).toBe("* A --> B --!> C");
     });
 
+    const hash = notesHash("x");
     const brokenData: [string[], string][] = [
       [
-        [anchor, "<!-- BEGIN wlz:release 1.0.0", "date: 2026-11-17"],
-        "line 2: the data block of release 1.0.0 lacks its closing --> line",
+        [
+          anchor,
+          begin("1.0.0"),
+          "## 1.0.0",
+          "<!-- wlz:data",
+          "date: 2026-11-17",
+        ],
+        "line 4: the data block lacks its closing --> line",
       ],
       [
         [
           anchor,
-          "<!-- BEGIN wlz:release 1.0.0",
+          begin("1.0.0"),
+          "<!-- wlz:data",
           "date: soon",
           "-->",
           end("1.0.0"),
         ],
-        "line 2: release 1.0.0: date must be a date as YYYY-MM-DD",
+        "line 3: release 1.0.0: date must be a date as YYYY-MM-DD",
       ],
       [
         [
           anchor,
-          "<!-- BEGIN wlz:release 1.0.0",
+          begin("1.0.0"),
+          "<!-- wlz:data",
           "date: 2026-11-17",
           "hash: h1:short",
           "changes: []",
           "-->",
           end("1.0.0"),
         ],
-        'line 2: release 1.0.0: hash must be "h1:" and 24 characters of base64',
+        'line 3: release 1.0.0: hash must be "h1:" and 24 characters of base64',
       ],
       [
         [
           anchor,
-          "<!-- BEGIN wlz:release 1.0.0",
+          begin("1.0.0"),
+          "<!-- wlz:data",
           "date: 2026-11-17",
-          `hash: ${notesHash("x")}`,
+          `hash: ${hash}`,
           "changes:",
           "  - kind: Added",
           "-->",
           end("1.0.0"),
         ],
-        "line 2: release 1.0.0: changes[0]: body is missing",
+        "line 3: release 1.0.0: changes[0]: body is missing",
       ],
       [
         [
           anchor,
-          "<!-- BEGIN wlz:release 1.0.0",
+          begin("1.0.0"),
+          "<!-- wlz:data",
           "author: me",
           "-->",
           end("1.0.0"),
         ],
-        'line 2: release 1.0.0: unknown data block key "author"',
+        'line 3: release 1.0.0: unknown data block key "author"',
+      ],
+      [
+        [anchor, "<!-- wlz:data", "author: me", "-->"],
+        "line 2: data block outside a release",
+      ],
+      [
+        [
+          anchor,
+          begin("1.0.0"),
+          ...dataComment(data),
+          "## 1.0.0",
+          end("1.0.0"),
+        ],
+        "line 3: the data block of release 1.0.0 must come right before its END marker",
+      ],
+      [
+        [
+          anchor,
+          begin("1.0.0"),
+          ...dataComment(data),
+          ...dataComment(data),
+          end("1.0.0"),
+        ],
+        "line 11: second data block in release 1.0.0",
       ],
     ];
 
