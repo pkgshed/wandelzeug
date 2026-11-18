@@ -10,6 +10,10 @@ import {
   parseChangelog,
   type Release,
 } from "./changelog/markers.ts";
+import {
+  parseReleaseTarget,
+  type ReleaseTarget,
+} from "./changelog/releases.ts";
 import type { Change, Metadata } from "./changes/fragments.ts";
 import { type GitRef, parseGitRef } from "./project/checks.ts";
 import { CONFIG_FILE } from "./project/config.ts";
@@ -33,6 +37,12 @@ export function version(text: string): Version {
   const parsed = parseVersion(text);
   if (parsed === undefined) throw new Error(`test version ${text} is invalid`);
   return parsed;
+}
+
+export function releaseTarget(text: string): ReleaseTarget {
+  const target = parseReleaseTarget(text);
+  if (target === undefined) throw new Error(`test target ${text} is invalid`);
+  return target;
 }
 
 export const change = (

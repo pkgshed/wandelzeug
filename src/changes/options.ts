@@ -6,11 +6,14 @@ import { type Kind, resolveKind } from "../project/config.ts";
 import { UsageError } from "../shared/foundations.ts";
 import { checkMetadataEntry, type Metadata } from "./fragments.ts";
 
+/** A --meta entry split at its first "=", such as ["pr", "42"]. */
+export type MetaEntry = readonly [key: string, value: string];
+
 /** The options of "wlz new" as the command line spells them. */
 export type NewChangeInput = {
   readonly kind?: string | undefined;
   readonly body?: string | undefined;
-  readonly meta?: readonly string[] | undefined;
+  readonly meta?: readonly MetaEntry[] | undefined;
 };
 
 /** What "wlz new" knows from its options before it asks anything. */
@@ -26,26 +29,18 @@ export type ChangeOptions = {
 /** Decimal integers up to 15 digits fit a double exactly. */
 const DECIMAL_INTEGER = /^(?:0|[1-9]\d{0,14})$/;
 
-function splitMetaOption(option: string): [string, string] {
-  const separator = option.indexOf("=");
-  if (separator < 1) {
-    throw new UsageError(
-      `invalid --meta ${JSON.stringify(option)}, expected key=value`,
-    );
-  }
-  const key = option.slice(0, separator).trim();
-  const text = option.slice(separator + 1).trim();
-  return [key, text];
-}
+/** Trims the key and the value of a --meta entry, so "pr = 42" means pr=42. */
+const trimMetaEntry = ([key, text]: MetaEntry): MetaEntry => [
+  key.trim(),
+  text.trim(),
+];
 
 /**
  * Turns --meta options into metadata. Decimal integers become YAML numbers,
  * so "pr=42" yields "pr: 42". An empty value, such as "pr=" from an unset
  * variable, leaves the entry out.
  */
-function metadataFromOptions(
-  options: readonly (readonly [string, string])[],
-): Metadata {
+function metadataFromOptions(options: readonly MetaEntry[]): Metadata {
   const entries = options
     .filter(([, text]) => text !== "")
     .map(([key, text]) => {
@@ -63,7 +58,7 @@ export async function readChangeOptions(
   kinds: readonly Kind[],
   input: NewChangeInput,
 ): Promise<ChangeOptions> {
-  const metaOptions = (input.meta ?? []).map(splitMetaOption);
+  const metaOptions = (input.meta ?? []).map(trimMetaEntry);
   return {
     kind: input.kind === undefined ? undefined : resolveKind(kinds, input.kind),
     body:

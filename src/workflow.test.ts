@@ -10,7 +10,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  parseReleaseTarget,
   planRelease,
   removeFragments,
   writeRelease,
@@ -31,6 +30,7 @@ import {
   isoDate,
   PR_FIELD_CONFIG,
   release,
+  releaseTarget,
   startRepository,
   writeChangelog,
   writeConfig,
@@ -68,7 +68,7 @@ describe("project workflow", () => {
 
     const first = await planRelease(
       project,
-      parseReleaseTarget("auto"),
+      releaseTarget("auto"),
       isoDate("2026-11-17"),
     );
     const firstSection = [
@@ -97,7 +97,7 @@ describe("project workflow", () => {
     await recordChange(project, change("Fixed", "* Hang on exit"));
     const second = await planRelease(
       project,
-      parseReleaseTarget("patch"),
+      releaseTarget("patch"),
       isoDate("2026-11-18"),
     );
     await writeRelease(second);
@@ -137,7 +137,7 @@ describe("project workflow", () => {
 
     const plan = await planRelease(
       project,
-      parseReleaseTarget("1.0.0"),
+      releaseTarget("1.0.0"),
       isoDate("2026-11-17"),
     );
     expect(plan.section).toContain("### Fixed\n\n* Crash (#7)\n* Hang\n");
@@ -164,7 +164,7 @@ describe("project workflow", () => {
 
     const plan = await planRelease(
       project,
-      parseReleaseTarget("2.0.0"),
+      releaseTarget("2.0.0"),
       isoDate("2026-11-17"),
     );
     expect(plan.section).toBe(
@@ -192,7 +192,7 @@ describe("project workflow", () => {
 
     const plan = await planRelease(
       project,
-      parseReleaseTarget("1.1.0"),
+      releaseTarget("1.1.0"),
       isoDate("2026-11-17"),
     );
     expect(plan.section).toContain(
@@ -214,7 +214,7 @@ describe("project workflow", () => {
 
     const attempt = planRelease(
       project,
-      parseReleaseTarget("1.0.0"),
+      releaseTarget("1.0.0"),
       isoDate("2026-11-17"),
     );
     await expect(attempt).rejects.toThrow(/release v?1\.0\.0 exists already/);
@@ -228,7 +228,7 @@ describe("project workflow", () => {
 
     const attempt = planRelease(
       project,
-      parseReleaseTarget("patch"),
+      releaseTarget("patch"),
       isoDate("2026-11-17"),
     );
     await expect(attempt).rejects.toThrow(
@@ -240,7 +240,7 @@ describe("project workflow", () => {
     await initProject(root);
     const project = await loadProject(root);
     await expect(
-      planRelease(project, parseReleaseTarget("patch"), isoDate("2026-11-17")),
+      planRelease(project, releaseTarget("patch"), isoDate("2026-11-17")),
     ).rejects.toThrow(/no unreleased changes/);
   });
 
