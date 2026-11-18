@@ -90,7 +90,7 @@ describe("changelog markers", () => {
     [[anchor, begin("latest")], 'line 2: invalid version "latest"'],
     [
       [anchor, "<!-- wlz:relase v1.0.0 -->"],
-      "line 2: unknown wlz marker, expected an anchor, BEGIN or END wlz:release VERSION, or BEGIN or END wlz:links",
+      "line 2: unknown wlz marker, expected an anchor, BEGIN or END wlz:release VERSION, BEGIN or END wlz:links, or a wlz:data block over several lines",
     ],
   ];
 
@@ -191,7 +191,7 @@ describe("changelog markers", () => {
         name: "1.0.0",
         begin: 2,
         notesEnd: 9,
-        end: 17,
+        end: 14,
       });
       expect(section?.data).toEqual(data);
     });
@@ -222,14 +222,15 @@ describe("changelog markers", () => {
     });
 
     const hash = notesHash("x");
+    const attributes = `date=2026-11-17 hash=${hash}`;
     const brokenData: [string[], string][] = [
       [
         [
           anchor,
           begin("1.0.0"),
           "## 1.0.0",
-          "<!-- wlz:data",
-          "date: 2026-11-17",
+          `<!-- wlz:data ${attributes}`,
+          "Added:",
         ],
         "line 4: the data block lacks its closing --> line",
       ],
@@ -237,54 +238,37 @@ describe("changelog markers", () => {
         [
           anchor,
           begin("1.0.0"),
-          "<!-- wlz:data",
-          "date: soon",
+          `<!-- wlz:data date=soon hash=${hash}`,
+          "Added:",
+          '  - body: "* x"',
           "-->",
           end("1.0.0"),
         ],
-        "line 3: release 1.0.0: date must be a date as YYYY-MM-DD",
+        "line 3: release 1.0.0: the data block needs date=YYYY-MM-DD",
       ],
       [
         [
           anchor,
           begin("1.0.0"),
-          "<!-- wlz:data",
-          "date: 2026-11-17",
-          "hash: h1:short",
-          "changes: []",
+          `<!-- wlz:data ${attributes}`,
+          "Added:",
+          "  - pr: 1",
           "-->",
           end("1.0.0"),
         ],
-        'line 3: release 1.0.0: hash must be "h1:" and 24 characters of base64',
+        "line 3: release 1.0.0: Added[0]: body is missing",
       ],
       [
         [
           anchor,
           begin("1.0.0"),
-          "<!-- wlz:data",
-          "date: 2026-11-17",
-          `hash: ${hash}`,
-          "changes:",
-          "  Added:",
-          "    - pr: 1",
-          "-->",
+          `<!-- wlz:data ${attributes} -->`,
           end("1.0.0"),
         ],
-        "line 3: release 1.0.0: changes.Added[0]: body is missing",
+        "line 3: unknown wlz marker, expected an anchor, BEGIN or END wlz:release VERSION, BEGIN or END wlz:links, or a wlz:data block over several lines",
       ],
       [
-        [
-          anchor,
-          begin("1.0.0"),
-          "<!-- wlz:data",
-          "author: me",
-          "-->",
-          end("1.0.0"),
-        ],
-        'line 3: release 1.0.0: unknown data block key "author"',
-      ],
-      [
-        [anchor, "<!-- wlz:data", "author: me", "-->"],
+        [anchor, `<!-- wlz:data ${attributes}`, "Added:", "-->"],
         "line 2: data block outside a release",
       ],
       [
@@ -305,7 +289,7 @@ describe("changelog markers", () => {
           ...dataComment(data),
           end("1.0.0"),
         ],
-        "line 11: second data block in release 1.0.0",
+        "line 8: second data block in release 1.0.0",
       ],
     ];
 

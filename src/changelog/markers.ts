@@ -17,7 +17,8 @@ import {
   type Version,
 } from "../shared/versions.ts";
 import {
-  formatReleaseData,
+  formatDataAttributes,
+  formatDataChanges,
   parseReleaseData,
   type ReleaseData,
 } from "./data.ts";
@@ -78,16 +79,13 @@ export const beginMarker = (name: string): string =>
 export const endMarker = (name: string): string =>
   `<!-- END wlz:release ${name} -->`;
 
-/** The line that opens the comment of a data block. */
-const DATA_BEGIN = "<!-- wlz:data";
-
 /** The line that closes the comment of a data block. */
 const DATA_END = "-->";
 
 /** Formats the comment that holds the data block of a release. */
 export const dataComment = (data: ReleaseData): string[] => [
-  DATA_BEGIN,
-  ...formatReleaseData(data),
+  `<!-- wlz:data ${formatDataAttributes(data)}`,
+  ...formatDataChanges(data.changes),
   DATA_END,
 ];
 
@@ -111,8 +109,8 @@ export const releaseSection = (
 
 const ANCHOR_MARKER = /^<!--\s*wlz:releases\b(.*?)-->$/;
 const BEGIN_MARKER = /^<!--\s*BEGIN\s+wlz:release\s+(\S+)\s*-->$/;
-/** The first line of a data block, whose comment goes on for several lines. */
-const DATA_MARKER = /^<!--\s*wlz:data\s*$/;
+/** The first line of a data block with its attributes. The comment goes on with the changes. */
+const DATA_MARKER = /^<!--\s*wlz:data\b(.*)$/;
 const END_MARKER = /^<!--\s*END\s+wlz:release\s+(\S+)\s*-->$/;
 const LINKS_BEGIN_MARKER = /^<!--\s*BEGIN\s+wlz:links\s*-->$/;
 const LINKS_END_MARKER = /^<!--\s*END\s+wlz:links\s*-->$/;
@@ -125,7 +123,7 @@ const ANY_MARKER = /^<!--\s*(?:BEGIN\s+|END\s+)?wlz:/;
 type Marker =
   | { readonly type: "anchor"; readonly attributes: string }
   | { readonly type: "begin"; readonly name: string }
-  | { readonly type: "data" }
+  | { readonly type: "data"; readonly attributes: string }
   | { readonly type: "end"; readonly name: string }
   | { readonly type: "linksBegin" }
   | { readonly type: "linksEnd" }
@@ -141,7 +139,10 @@ function classifyLine(line: string): Marker | undefined {
 
   const begin = BEGIN_MARKER.exec(text)?.[1];
   if (begin !== undefined) return { type: "begin", name: begin };
-  if (DATA_MARKER.test(text)) return { type: "data" };
+  const data = DATA_MARKER.exec(text);
+  if (data !== null && !text.endsWith(DATA_END)) {
+    return { type: "data", attributes: data[1] ?? "" };
+  }
   const end = END_MARKER.exec(text)?.[1];
   if (end !== undefined) return { type: "end", name: end };
   if (LINKS_BEGIN_MARKER.test(text)) return { type: "linksBegin" };
@@ -306,14 +307,15 @@ function scanMarker(
       throw new Error(OLD_LINKS_MIGRATION);
     case "unknown":
       throw new Error(
-        "unknown wlz marker, expected an anchor, BEGIN or END wlz:release VERSION, or BEGIN or END wlz:links",
+        "unknown wlz marker, expected an anchor, BEGIN or END wlz:release VERSION, BEGIN or END wlz:links, or a wlz:data block over several lines",
       );
   }
 }
 
-/** Gives the open release the data block that starts and ends on the given lines. */
+/** Gives the open release the data block that starts on the given line. */
 function openData(
   scan: ChangelogScan,
+  attributes: string,
   yaml: string,
   dataBegin: number,
 ): OpenRelease {
@@ -325,7 +327,7 @@ function openData(
     throw new Error(`second data block in release ${open.release.name}`);
   }
   const data = withContext(`release ${open.release.name}`, () =>
-    parseReleaseData(yaml),
+    parseReleaseData(attributes, yaml),
   );
   scan.open = { ...open, data, dataBegin };
   return scan.open;
@@ -342,6 +344,7 @@ function scanData(
   problems: string[],
   lines: readonly string[],
   start: number,
+  attributes: string,
 ): number {
   const close = lines.findIndex(
     (line, index) => index > start && line.trim() === DATA_END,
@@ -354,7 +357,7 @@ function scanData(
   }
 
   const yaml = lines.slice(start + 1, close).join("\n");
-  const opened = attempt(() => openData(scan, yaml, start));
+  const opened = attempt(() => openData(scan, attributes, yaml, start));
   if (!opened.ok) {
     problems.push(`line ${start + 1}: ${opened.error}`);
     return close + 1;
@@ -380,7 +383,9 @@ function scanLine(
 ): number {
   const marker = classifyLine(lines[index] ?? "");
   if (marker === undefined) return index + 1;
-  if (marker.type === "data") return scanData(scan, problems, lines, index);
+  if (marker.type === "data") {
+    return scanData(scan, problems, lines, index, marker.attributes);
+  }
   const result = attempt(() => scanMarker(scan, marker, index));
   if (!result.ok) problems.push(`line ${index + 1}: ${result.error}`);
   return index + 1;

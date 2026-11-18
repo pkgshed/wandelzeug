@@ -105,7 +105,7 @@ describe("import", () => {
     ];
     const plan = imported(onboarded(fixedFirst));
     expect(plan.content).toContain(
-      'changes:\n  Added:\n    - body: "- Feature"\n  Fixed:\n    - body: "- Crash"\n',
+      '\nAdded:\n  - body: "- Feature"\nFixed:\n  - body: "- Crash"\n-->',
     );
   });
 
@@ -217,7 +217,7 @@ describe("import", () => {
         ...marked("0.1.0", [...notes, ...ending]),
         "",
       ]);
-      expect(plan.content).toContain("* Feature\n\n<!-- wlz:data\n");
+      expect(plan.content).toContain("* Feature\n\n<!-- wlz:data date=");
     }
   });
 

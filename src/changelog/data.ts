@@ -2,8 +2,9 @@
  * The data block of a release: what "wlz render" needs to render the
  * release again after a template changed. It holds the date and the
  * changes of the release, and a hash of the notes as wandelzeug last
- * rendered them, which reveals edits by hand. The block is YAML in an HTML
- * comment at the bottom of the release, which Markdown viewers hide.
+ * rendered them, which reveals edits by hand. The block is an HTML comment
+ * at the bottom of the release, which Markdown viewers hide: the date and
+ * the hash as attributes on its first line, and the changes as YAML below.
  */
 
 import { createHash } from "node:crypto";
@@ -78,8 +79,8 @@ function changeItem(change: Change): string[] {
     .join("\n")
     .split("\n")
     .map((line, index) => {
-      if (index === 0) return `    - ${line}`;
-      return line === "" ? "" : `      ${line}`;
+      if (index === 0) return `  - ${line}`;
+      return line === "" ? "" : `    ${line}`;
     });
 }
 
@@ -94,31 +95,60 @@ function groupByKind(
   ]);
 }
 
-/** Formats the lines of a data block, without the comment around it. */
-export const formatReleaseData = (data: ReleaseData): string[] => [
-  dataEntry("date", data.date),
-  dataEntry("hash", data.hash),
-  "changes:",
-  ...groupByKind(data.changes).flatMap(([kind, changes]) => [
-    `  ${kindKey(kind)}:`,
-    ...changes.flatMap(changeItem),
-  ]),
-];
+/** Formats the date and the hash of a data block as attributes, such as "date=2026-11-17 hash=h1:...". */
+export const formatDataAttributes = (data: ReleaseData): string =>
+  `date=${data.date} hash=${data.hash}`;
 
-const DATA_KEYS = ["date", "hash", "changes"];
+/** Formats the changes of a data block as YAML that maps each kind to its changes. */
+export const formatDataChanges = (changes: readonly Change[]): string[] =>
+  groupByKind(changes).flatMap(([kind, group]) => [
+    `${kindKey(kind)}:`,
+    ...group.flatMap(changeItem),
+  ]);
 
-function parseDataDate(value: unknown): IsoDate {
-  const date = typeof value === "string" ? parseIsoDate(value) : undefined;
+const DATA_ATTRIBUTES = ["date", "hash"] as const;
+type DataAttribute = (typeof DATA_ATTRIBUTES)[number];
+
+const isDataAttribute = (key: string): key is DataAttribute =>
+  (DATA_ATTRIBUTES as readonly string[]).includes(key);
+
+/** Splits attributes such as "date=2026-11-17 hash=h1:..." into their values. */
+function parseDataAttributes(
+  text: string,
+): Partial<Record<DataAttribute, string>> {
+  const entries = text.split(/\s+/).filter((entry) => entry !== "");
+  return entries.reduce<Partial<Record<DataAttribute, string>>>(
+    (attributes, entry) => {
+      const separator = entry.indexOf("=");
+      const key = entry.slice(0, Math.max(separator, 0));
+      if (!isDataAttribute(key)) {
+        throw new Error(
+          `unknown data attribute ${JSON.stringify(entry)}, expected date=YYYY-MM-DD and hash=h1:...`,
+        );
+      }
+      if (attributes[key] !== undefined) {
+        throw new Error(`the data attribute ${key} appears twice`);
+      }
+      return { ...attributes, [key]: entry.slice(separator + 1) };
+    },
+    {},
+  );
+}
+
+function parseDataDate(value: string | undefined): IsoDate {
+  const date = value === undefined ? undefined : parseIsoDate(value);
   if (date === undefined) {
-    throw new Error("date must be a date as YYYY-MM-DD");
+    throw new Error("the data block needs date=YYYY-MM-DD");
   }
   return date;
 }
 
-function parseDataHash(value: unknown): NotesHash {
-  const isHash = typeof value === "string" && NOTES_HASH.test(value);
+function parseDataHash(value: string | undefined): NotesHash {
+  const isHash = value !== undefined && NOTES_HASH.test(value);
   if (!isHash) {
-    throw new Error('hash must be "h1:" and 24 characters of base64');
+    throw new Error(
+      'the data block needs hash= with "h1:" and 24 characters of base64',
+    );
   }
   return value as NotesHash;
 }
@@ -139,37 +169,34 @@ function parseDataChange(kind: string, value: unknown): Change {
 
 function parseKindGroup(kind: string, value: unknown): Change[] {
   if (!Array.isArray(value) || value.length === 0) {
-    throw new Error(`changes.${kind} must be a non-empty list`);
+    throw new Error(`${kind} must hold a non-empty list of changes`);
   }
   return value.map((item: unknown, index) =>
-    withContext(`changes.${kind}[${index}]`, () => parseDataChange(kind, item)),
+    withContext(`${kind}[${index}]`, () => parseDataChange(kind, item)),
   );
 }
 
-/** Parses the changes, which the data block groups by kind, into one list. */
-function parseDataChanges(value: unknown): Change[] {
-  const isGroups = isRecord(value) && Object.keys(value).length > 0;
-  if (!isGroups) {
-    throw new Error("changes must map each kind to a list of changes");
+/** Parses the YAML of the changes, which maps each kind to its changes, into one list. */
+function parseDataChanges(yaml: string): Change[] {
+  const groups: unknown = withContext("data block", () => Bun.YAML.parse(yaml));
+  const hasGroups = isRecord(groups) && Object.keys(groups).length > 0;
+  if (!hasGroups) {
+    throw new Error("the data block must map each kind to a list of changes");
   }
-  return Object.entries(value).flatMap(([kind, group]) =>
+  return Object.entries(groups).flatMap(([kind, group]) =>
     parseKindGroup(kind, group),
   );
 }
 
-/** Parses the YAML of a data block. */
-export function parseReleaseData(yaml: string): ReleaseData {
-  const fields: unknown = withContext("data block", () => Bun.YAML.parse(yaml));
-  if (!isRecord(fields)) {
-    throw new Error("the data block must be a mapping");
-  }
-  const unknown = Object.keys(fields).find((key) => !DATA_KEYS.includes(key));
-  if (unknown !== undefined) {
-    throw new Error(`unknown data block key ${JSON.stringify(unknown)}`);
-  }
+/** Parses a data block from the attributes on its first line and the YAML of its changes. */
+export function parseReleaseData(
+  attributes: string,
+  yaml: string,
+): ReleaseData {
+  const values = parseDataAttributes(attributes);
   return {
-    date: parseDataDate(fields["date"]),
-    hash: parseDataHash(fields["hash"]),
-    changes: parseDataChanges(fields["changes"]),
+    date: parseDataDate(values.date),
+    hash: parseDataHash(values.hash),
+    changes: parseDataChanges(yaml),
   };
 }

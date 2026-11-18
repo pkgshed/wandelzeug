@@ -212,12 +212,9 @@ describe("command line", () => {
         "",
         "* Feature",
         "",
-        "<!-- wlz:data",
-        "date: 2026-11-17",
-        `hash: ${notesHash("## [`0.1.0`] (2026-11-17)\n\n### Added\n\n* Feature")}`,
-        "changes:",
-        "  Added:",
-        '    - body: "* Feature"',
+        `<!-- wlz:data date=2026-11-17 hash=${notesHash("## [`0.1.0`] (2026-11-17)\n\n### Added\n\n* Feature")}`,
+        "Added:",
+        '  - body: "* Feature"',
         "-->",
         "<!-- END wlz:release 0.1.0 -->",
         "",
@@ -665,7 +662,7 @@ describe("command line", () => {
       await editConfig("releaseData: false", "releaseData: true");
       expect((await run("import")).stdout).toBe("imported 1 release: 0.1.0\n");
       expect(await changelog()).toContain(
-        "* Feature\n\n<!-- wlz:data\ndate: 2026-11-17\n",
+        "* Feature\n\n<!-- wlz:data date=2026-11-17 hash=",
       );
       expect((await run("check")).exitCode).toBe(0);
     });

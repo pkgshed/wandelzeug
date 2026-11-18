@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { isoDate } from "../test-helpers.ts";
 import {
-  formatReleaseData,
+  formatDataAttributes,
+  formatDataChanges,
   notesHash,
   parseReleaseData,
   type ReleaseData,
@@ -35,80 +36,84 @@ describe("release data", () => {
     ],
   };
 
+  /** Formats a data block and parses it back, as the changelog markers do. */
+  const roundTrip = (release: ReleaseData) =>
+    parseReleaseData(
+      formatDataAttributes(release),
+      formatDataChanges(release.changes).join("\n"),
+    );
+
   test("a data block parses back into the same data", () => {
-    expect(parseReleaseData(formatReleaseData(data).join("\n"))).toEqual(data);
+    expect(roundTrip(data)).toEqual(data);
+  });
+
+  test("the date and the hash become attributes", () => {
+    expect(formatDataAttributes(data)).toBe(
+      `date=2026-11-17 hash=${data.hash}`,
+    );
   });
 
   test("a data block never holds the end of an HTML comment", () => {
-    const text = formatReleaseData(data).join("\n");
+    const text = formatDataChanges(data.changes).join("\n");
     expect(text).not.toMatch(/--!?>/);
     expect(text).toContain('note: "a -\\x2D> b"');
   });
 
-  test("a data block groups the changes by kind, in the order of their first change", () => {
+  test("the changes group by kind, in the order of their first change", () => {
     expect(
-      formatReleaseData({
-        ...data,
-        changes: [
-          { kind: "Added", metadata: { pr: 7 }, body: "* One\n* Two" },
-          { kind: "Fixed", metadata: {}, body: "* Crash" },
-          { kind: "Added", metadata: {}, body: "* Three" },
-        ],
-      }),
+      formatDataChanges([
+        { kind: "Added", metadata: { pr: 7 }, body: "* One\n* Two" },
+        { kind: "Fixed", metadata: {}, body: "* Crash" },
+        { kind: "Added", metadata: {}, body: "* Three" },
+      ]),
     ).toEqual([
-      "date: 2026-11-17",
-      `hash: ${data.hash}`,
-      "changes:",
-      "  Added:",
-      "    - pr: 7",
-      "      body: |-",
-      "        * One",
-      "        * Two",
-      '    - body: "* Three"',
-      "  Fixed:",
-      '    - body: "* Crash"',
+      "Added:",
+      "  - pr: 7",
+      "    body: |-",
+      "      * One",
+      "      * Two",
+      '  - body: "* Three"',
+      "Fixed:",
+      '  - body: "* Crash"',
     ]);
   });
 
   test("a kind that holds --> stays inside the comment", () => {
-    const text = formatReleaseData({
+    const tricky = {
       ...data,
       changes: [{ kind: "A --> B", metadata: {}, body: "* x" }],
-    }).join("\n");
-    expect(text).toContain('  "A -\\x2D> B":');
-    expect(parseReleaseData(text).changes[0]?.kind).toBe("A --> B");
+    };
+    expect(formatDataChanges(tricky.changes)).toContain('"A -\\x2D> B":');
+    expect(roundTrip(tricky).changes[0]?.kind).toBe("A --> B");
   });
 
-  const header = `date: 2026-11-17\nhash: ${notesHash("x")}`;
+  const attributes = `date=2026-11-17 hash=${notesHash("x")}`;
+  const changes = 'Fixed:\n  - body: "* Crash"';
   test.each([
-    ["- a list", "the data block must be a mapping"],
-    ["date: 2026-11-17\nauthor: me", 'unknown data block key "author"'],
-    [`date: 2026-13-01\nhash: ${notesHash("x")}`, "date must be a date"],
+    ["", changes, "the data block needs date=YYYY-MM-DD"],
     [
-      `${header}\nchanges: {}`,
-      "changes must map each kind to a list of changes",
+      `date=2026-13-01 hash=${notesHash("x")}`,
+      changes,
+      "needs date=YYYY-MM-DD",
     ],
+    ["date=2026-11-17 hash=h1:short", changes, 'needs hash= with "h1:"'],
+    [`${attributes} author=me`, changes, 'unknown data attribute "author=me"'],
+    [`${attributes} date=2026-11-18`, changes, "date appears twice"],
+    [attributes, "", "the data block must map each kind to a list of changes"],
     [
-      `${header}\nchanges:\n  - body: "* Fix"`,
-      "changes must map each kind to a list of changes",
+      attributes,
+      '- body: "* Fix"',
+      "the data block must map each kind to a list of changes",
     ],
+    [attributes, "Fixed: []", "Fixed must hold a non-empty list of changes"],
+    [attributes, "Fixed:\n  - pr: 1", "Fixed[0]: body is missing"],
+    [attributes, 'Fixed:\n  - body: "* "', "Fixed[0]: body is empty"],
     [
-      `${header}\nchanges:\n  Fixed: []`,
-      "changes.Fixed must be a non-empty list",
+      attributes,
+      'Fixed:\n  - kind: Added\n    body: "* x"',
+      "Fixed[0]: kind comes from the group that holds the change",
     ],
-    [
-      `${header}\nchanges:\n  Fixed:\n    - pr: 1`,
-      "changes.Fixed[0]: body is missing",
-    ],
-    [
-      `${header}\nchanges:\n  Fixed:\n    - body: "* "`,
-      "changes.Fixed[0]: body is empty",
-    ],
-    [
-      `${header}\nchanges:\n  Fixed:\n    - kind: Added\n      body: "* x"`,
-      "changes.Fixed[0]: kind comes from the group that holds the change",
-    ],
-  ])("parseReleaseData rejects %p with %p", (yaml, message) => {
-    expect(() => parseReleaseData(yaml)).toThrow(message);
+  ])("attributes %p with changes %p fail with %p", (head, yaml, message) => {
+    expect(() => parseReleaseData(head, yaml)).toThrow(message);
   });
 });
