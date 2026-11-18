@@ -23,6 +23,7 @@
  * Run "wlz --help" for the command reference.
  */
 
+import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   type ChangelogDocument,
@@ -38,6 +39,7 @@ import {
   removeFragments,
   writeRelease,
 } from "./changelog/releases.ts";
+import { planRender } from "./changelog/render.ts";
 import {
   editorCommand,
   findKeptDraft,
@@ -199,6 +201,28 @@ async function runBatch(invocation: InvocationOf<"batch">): Promise<void> {
   );
 }
 
+/** Describes what render left as it was, if anything. */
+function keptDescription(withoutData: number): string | undefined {
+  if (withoutData === 0) return undefined;
+  const releases = countOf(withoutData, "release");
+  return `kept ${releases} without a data block and the link definitions as they are`;
+}
+
+async function runRender(invocation: InvocationOf<"render">): Promise<void> {
+  const project = await openInvocationProject(invocation);
+  const plan = await planRender(project, { force: invocation.force });
+  if (invocation.dryRun) {
+    process.stdout.write(plan.content);
+    return;
+  }
+
+  await writeFile(plan.path, plan.content);
+  const releases = countOf(plan.rendered, "release");
+  console.log(`rendered ${releases} in ${displayPath(plan.path)}`);
+  const kept = keptDescription(plan.withoutData);
+  if (kept !== undefined) console.log(kept);
+}
+
 async function runLatest(invocation: InvocationOf<"latest">): Promise<void> {
   const project = await openInvocationProject(invocation);
   const [latest] = knownReleases(await readChangelog(project));
@@ -278,6 +302,8 @@ function runInvocation(invocation: Invocation): Promise<void> {
       return runBatch(invocation);
     case "release":
       return runRelease(invocation);
+    case "render":
+      return runRender(invocation);
     case "latest":
       return runLatest(invocation);
     case "next":

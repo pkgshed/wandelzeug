@@ -202,6 +202,23 @@ const releaseCommand = command(
   },
 );
 
+const renderCommand = command(
+  "render",
+  object({
+    command: constant("render"),
+    force: switchFlag(
+      ["--force"],
+      message`Also render releases whose notes were edited by hand, which drops those edits`,
+    ),
+    dryRun: dryRunFlag(message`Print the changelog instead of writing it`),
+    ...COMMON_OPTIONS,
+  }),
+  {
+    brief: message`Render the releases in the changelog again`,
+    description: message`Renders every release from its data block with the current templates and configuration, and the link definitions when every release has a data block. A release whose notes were edited by hand stops the command, unless you pass ${optionName("--force")}. Releases from before data blocks stay as they are.`,
+  },
+);
+
 const latestCommand = command(
   "latest",
   object({
@@ -242,6 +259,7 @@ const WLZ = or(
   checkCommand,
   batchCommand,
   releaseCommand,
+  renderCommand,
   latestCommand,
   nextCommand,
   showCommand,

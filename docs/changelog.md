@@ -1,6 +1,6 @@
 # The changelog
 
-This guide covers how wandelzeug finds its way around `CHANGELOG.md`, the links of releases, the templates that render a release, and how `wlz init` adopts an existing changelog.
+This guide covers how wandelzeug finds its way around `CHANGELOG.md`, how it renders past releases again, the links of releases, the templates that render a release, and how `wlz init` adopts an existing changelog.
 
 ## Markers
 
@@ -15,7 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 <!-- wlz:releases baseline=1.4.2 -->
 
-<!-- BEGIN wlz:release 1.6.0 -->
+<!-- BEGIN wlz:release 1.6.0
+date: 2026-11-17
+hash: h1:wohGM1AA3aJY2u5jLXV2KA==
+changes:
+  - kind: Added
+    pr: 42
+    body: "* Support for TOML config"
+-->
 ## [`1.6.0`] (2026-11-17)
 
 ### Added
@@ -23,7 +30,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 * Support for TOML config
 <!-- END wlz:release 1.6.0 -->
 
-<!-- BEGIN wlz:release 1.5.0 -->
+<!-- BEGIN wlz:release 1.5.0
+...
+-->
 ...
 <!-- END wlz:release 1.5.0 -->
 
@@ -31,12 +40,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 Older history from before wandelzeug.
 
-<!-- wlz:links -->
+<!-- BEGIN wlz:links -->
 [`1.6.0`]: https://codeberg.org/owner/repo/compare/v1.5.0...v1.6.0
 [`1.5.0`]: https://codeberg.org/owner/repo/compare/v1.4.2...v1.5.0
+<!-- END wlz:links -->
 ```
 
-The anchor `<!-- wlz:releases -->` marks where releases go: `batch` inserts each new release directly below it, so the newest release comes first. Each release sits between `BEGIN` and `END` markers that name its version, which is how `latest`, `next`, and `show` find releases without parsing headings. `batch` only ever inserts, so you can fix a typo inside an older release by hand. The changelog changes only when you release, so branches don't conflict over it. The header above the anchor is yours, and `init` writes the one shown here into a new changelog.
+The anchor `<!-- wlz:releases -->` marks where releases go: `batch` inserts each new release directly below it, so the newest release comes first. Each release sits between `BEGIN` and `END` markers that name its version, which is how `latest`, `next`, and `show` find releases without parsing headings. The changelog changes only when you release, so branches don't conflict over it. The header above the anchor is yours, and `init` writes the one shown here into a new changelog.
+
+The `BEGIN` marker of a release holds its data block: the date, the changes as their change files had them, and a hash of the notes as wandelzeug rendered them. The `wlz:links` markers enclose the link definitions that wandelzeug manages. Definitions outside them belong to you.
+
+## Render past releases again
+
+After you change a template or a kind label, render every release again from its data block:
+
+```sh
+wlz render
+```
+
+The command renders the notes of each release and the link definitions with the current settings, and leaves everything outside the markers alone. To preview the result, pass `--dry-run`, which prints the changelog instead of writing it.
+
+The hash in the data block shows whether someone edited the notes of a release by hand. `wlz check` reports such releases, and `wlz render` refuses to overwrite them. To keep an edit, such as a typo fix, make the same edit in the data block of the release, then run `wlz render --force`, which renders over the edited notes. When a release has changes of a kind that the configuration no longer lists, both commands name the release and the kind.
+
+Releases from before data blocks keep their notes. While any release lacks a data block, `wlz render` also keeps the link definitions as they are, because a link can use the date of its release.
 
 ## Show the notes of a release
 
@@ -50,7 +76,7 @@ The output is the text between the release's markers, including its heading.
 
 ## Links
 
-`batch` also inserts a link definition for each release directly below the anchor `<!-- wlz:links -->`, which turns the version in the heading into a link. The default `linkFormat` compares the release with the previous one, the way [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) does, and links the tag of a first release:
+`batch` also inserts a link definition for each release directly below the marker `<!-- BEGIN wlz:links -->`, which turns the version in the heading into a link. The default `linkFormat` compares the release with the previous one, the way [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) does, and links the tag of a first release:
 
 ```yaml
 linkFormat: "[`{{version}}`]: {{repositoryUrl}}/{{#previousTag}}compare/{{previousTag}}...{{tag}}{{/previousTag}}{{^previousTag}}releases/tag/{{tag}}{{/previousTag}}"
@@ -100,11 +126,13 @@ The file that `init` writes explains every other setting, including the paths an
 
 ## Onboard an existing changelog
 
-When a `CHANGELOG.md` exists already, `init` only adds the two anchors and keeps every other line, including your header:
+When a `CHANGELOG.md` exists already, `init` only adds the release anchor and the link markers, and keeps every other line, including your header:
 
 - The release anchor goes above the first heading that names a version, such as `## 1.4.2` or `## [1.4.2] - 2025-03-02`. In a [Keep a Changelog](https://keepachangelog.com) file, an `## [Unreleased]` section stays above it.
 - The newest stable version among those headings becomes the `baseline`, which `latest` and `next` use until wandelzeug records its first release. To choose the baseline yourself, pass `--baseline VERSION`.
-- The links anchor goes above the first link definition that names a version, so an `[unreleased]: ...` definition stays above it.
-- Without such a heading or definition, the anchor goes to the end of the file.
+- The link markers go above the first link definition that names a version, so an `[unreleased]: ...` definition stays above them.
+- Without such a heading or definition, the anchor and the markers go to the end of the file.
 
-`init` prints the lines of the anchors and the baseline. They are plain text, so if a guess is wrong, move an anchor line or edit the baseline by hand.
+`init` prints the lines of the anchor and the markers, and the baseline. They are plain text, so if a guess is wrong, move a marker line or edit the baseline by hand.
+
+The releases from before wandelzeug stay as they are, without data blocks, so `wlz render` leaves them alone.

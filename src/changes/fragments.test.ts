@@ -70,7 +70,7 @@ describe("fragments", () => {
   const invalid: [string, RegExp][] = [
     ["* Crash\n", /missing front matter/],
     ["---\nkind: Fixed\n* Crash\n", /unterminated front matter/],
-    ["---\npr: 1\n---\n* Crash\n", /front matter needs a kind/],
+    ["---\npr: 1\n---\n* Crash\n", /kind is missing/],
     ["---\nkind: Improved\n---\n* Crash\n", /unknown kind "Improved"/],
     ["---\nkind: Fixed\n---\n\n", /body is empty/],
     ["---\nkind: Fixed\n---\n* \n", /body is empty/],

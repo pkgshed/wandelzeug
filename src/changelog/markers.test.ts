@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { changelogDocument, version } from "../test-helpers.ts";
+import { changelogDocument, isoDate, version } from "../test-helpers.ts";
+import { notesHash, type ReleaseData } from "./data.ts";
 import {
   anchorMarker,
   insertRelease,
   knownReleases,
-  LINKS_ANCHOR,
+  LINKS_BEGIN,
+  LINKS_END,
   parseChangelog,
   releaseNotes,
+  releaseSection,
+  replaceLines,
 } from "./markers.ts";
 
 describe("changelog markers", () => {
@@ -85,7 +89,7 @@ describe("changelog markers", () => {
     [[anchor, begin("latest")], 'line 2: invalid version "latest"'],
     [
       [anchor, "<!-- wlz:relase v1.0.0 -->"],
-      "line 2: unknown wlz marker, expected an anchor or BEGIN or END wlz:release VERSION",
+      "line 2: unknown wlz marker, expected an anchor, BEGIN or END wlz:release VERSION, or BEGIN or END wlz:links",
     ],
   ];
 
@@ -94,24 +98,37 @@ describe("changelog markers", () => {
     expect(parsed.ok ? [] : parsed.problems).toContain(problem);
   });
 
-  test("parseChangelog finds the links anchor below the release anchor", () => {
-    const text = [anchor, "", "## 1.0.0", "", LINKS_ANCHOR, "[1.0.0]: x"];
-    expect(changelogDocument(text.join("\n")).links).toBe(4);
+  test("parseChangelog finds the link markers below the release anchor", () => {
+    const text = [anchor, "", "## 1.0.0", "", LINKS_BEGIN, LINKS_END, "[1]: x"];
+    expect(changelogDocument(text.join("\n")).links).toEqual({
+      begin: 4,
+      end: 5,
+    });
     expect(changelogDocument(anchor).links).toBeUndefined();
   });
 
   const misplacedLinks: [string[], string][] = [
     [
-      [anchor, LINKS_ANCHOR, LINKS_ANCHOR],
-      "line 3: second links anchor, the first is on line 2",
+      [anchor, LINKS_BEGIN, LINKS_END, LINKS_BEGIN, LINKS_END],
+      "line 4: second BEGIN wlz:links marker, the first is on line 2",
     ],
     [
-      [LINKS_ANCHOR, anchor],
-      "line 1: the links anchor must come after the release anchor",
+      [LINKS_BEGIN, LINKS_END, anchor],
+      "line 1: the link definitions must come after the release anchor",
     ],
     [
-      [anchor, begin("v1.0.0"), LINKS_ANCHOR, end("v1.0.0")],
-      "line 3: links anchor inside release v1.0.0",
+      [anchor, begin("v1.0.0"), LINKS_BEGIN, LINKS_END, end("v1.0.0")],
+      "line 3: BEGIN wlz:links marker inside release v1.0.0",
+    ],
+    [[anchor, LINKS_BEGIN], "line 2: BEGIN wlz:links lacks its END marker"],
+    [[anchor, LINKS_END], "line 2: END wlz:links marker without a BEGIN"],
+    [
+      [anchor, LINKS_BEGIN, begin("v1.0.0"), end("v1.0.0"), LINKS_END],
+      "line 3: BEGIN of v1.0.0 inside the link definitions",
+    ],
+    [
+      [anchor, "<!-- wlz:links -->"],
+      "line 2: the links anchor of wandelzeug 0.1 is now a pair of markers: replace this line with <!-- BEGIN wlz:links -->, and put <!-- END wlz:links --> after the link definitions that wandelzeug added",
     ],
   ];
 
@@ -123,8 +140,15 @@ describe("changelog markers", () => {
     },
   );
 
-  test("insertRelease adds the link below the links anchor, newest first", () => {
-    const text = [anchor, "", LINKS_ANCHOR, "[`1.0.0`]: old", ""].join("\n");
+  test("insertRelease adds the link below the BEGIN link marker, newest first", () => {
+    const text = [
+      anchor,
+      "",
+      LINKS_BEGIN,
+      "[`1.0.0`]: old",
+      LINKS_END,
+      "",
+    ].join("\n");
     const inserted = insertRelease(
       changelogDocument(text),
       "S",
@@ -136,18 +160,122 @@ describe("changelog markers", () => {
         "",
         "S",
         "",
-        LINKS_ANCHOR,
+        LINKS_BEGIN,
         "[`1.1.0`]: new",
         "[`1.0.0`]: old",
+        LINKS_END,
         "",
       ].join("\n"),
     );
   });
 
-  test("insertRelease needs the links anchor for a link", () => {
+  test("insertRelease needs the link markers for a link", () => {
     expect(() =>
       insertRelease(changelogDocument(anchor), "S", "[x]: y"),
-    ).toThrow("no <!-- wlz:links --> anchor for the link definition");
+    ).toThrow("no <!-- BEGIN wlz:links --> marker for the link definition");
+  });
+
+  describe("data blocks", () => {
+    const notes = "## 1.0.0\n\n### Added\n\n* Feature";
+    const data: ReleaseData = {
+      date: isoDate("2026-11-17"),
+      hash: notesHash(notes),
+      changes: [{ kind: "Added", metadata: { pr: 7 }, body: "* Feature" }],
+    };
+    const withData = [anchor, "", releaseSection("1.0.0", data, notes), ""];
+
+    test("parseChangelog reads the data block in the BEGIN marker", () => {
+      const [section] = changelogDocument(withData.join("\n")).releases;
+      expect(section).toMatchObject({ name: "1.0.0", begin: 2, notes: 10 });
+      expect(section?.data).toEqual(data);
+    });
+
+    test("releaseNotes leaves out the data block", () => {
+      const document = changelogDocument(withData.join("\n"));
+      expect(releaseNotes(document, version("1.0.0"))).toBe(`${notes}\n`);
+    });
+
+    test("a data block keeps the comment closed when a value holds -->", () => {
+      const tricky: ReleaseData = {
+        ...data,
+        changes: [{ kind: "Added", metadata: {}, body: "* A --> B --!> C" }],
+      };
+      const section = releaseSection("1.0.0", tricky, notes);
+      expect(
+        section.split("\n").filter((line) => line.includes("-->")),
+      ).toEqual(["-->", "<!-- END wlz:release 1.0.0 -->"]);
+      const [parsed] = changelogDocument([anchor, section].join("\n")).releases;
+      expect(parsed?.data?.changes[0]?.body).toBe("* A --> B --!> C");
+    });
+
+    const brokenData: [string[], string][] = [
+      [
+        [anchor, "<!-- BEGIN wlz:release 1.0.0", "date: 2026-11-17"],
+        "line 2: the data block of release 1.0.0 lacks its closing --> line",
+      ],
+      [
+        [
+          anchor,
+          "<!-- BEGIN wlz:release 1.0.0",
+          "date: soon",
+          "-->",
+          end("1.0.0"),
+        ],
+        "line 2: release 1.0.0: date must be a date as YYYY-MM-DD",
+      ],
+      [
+        [
+          anchor,
+          "<!-- BEGIN wlz:release 1.0.0",
+          "date: 2026-11-17",
+          "hash: h1:short",
+          "changes: []",
+          "-->",
+          end("1.0.0"),
+        ],
+        'line 2: release 1.0.0: hash must be "h1:" and 24 characters of base64',
+      ],
+      [
+        [
+          anchor,
+          "<!-- BEGIN wlz:release 1.0.0",
+          "date: 2026-11-17",
+          `hash: ${notesHash("x")}`,
+          "changes:",
+          "  - kind: Added",
+          "-->",
+          end("1.0.0"),
+        ],
+        "line 2: release 1.0.0: changes[0]: body is missing",
+      ],
+      [
+        [
+          anchor,
+          "<!-- BEGIN wlz:release 1.0.0",
+          "author: me",
+          "-->",
+          end("1.0.0"),
+        ],
+        'line 2: release 1.0.0: unknown data block key "author"',
+      ],
+    ];
+
+    test.each(brokenData)(
+      "parseChangelog rejects %p with %p",
+      (lines, problem) => {
+        const parsed = parseChangelog(lines.join("\n"));
+        expect(parsed.ok ? [] : parsed.problems).toContain(problem);
+      },
+    );
+  });
+
+  test("replaceLines replaces and inserts lines, keeping the line breaks", () => {
+    const document = changelogDocument([anchor, "a", "b", "c"].join("\r\n"));
+    const text = replaceLines(document, [
+      { start: 1, end: 1, lines: ["A1", "A2"] },
+      { start: 3, end: 2, lines: ["inserted"] },
+    ]);
+    expect(text).toBe([anchor, "A1", "A2", "b", "inserted", "c"].join("\r\n"));
   });
 
   test("text between the markers stays opaque", () => {

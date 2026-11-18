@@ -56,7 +56,7 @@ extraFields:
 
 ## Check changes in CI
 
-`check` validates every unreleased change against the configured kinds and extra fields, and the markers in the changelog. It reports each problem with its file, and for the changelog with its line. With `--since REF`, it also fails when the commits since the current branch forked from `REF` add or modify no change file. Uncommitted files don't count.
+`check` validates every unreleased change against the configured kinds and extra fields, and the markers and data blocks in the changelog. It reports each problem with its file, and for the changelog with its line. With `--since REF`, it also fails when the commits since the current branch forked from `REF` add or modify no change file. Uncommitted files don't count.
 
 To require a changelog entry in every pull request, run the following command in CI:
 

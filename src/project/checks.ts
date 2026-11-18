@@ -5,6 +5,7 @@
 import { readFile } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 import { MISSING_CHANGELOG, parseChangelog } from "../changelog/markers.ts";
+import { releaseDataProblems } from "../changelog/render.ts";
 import { applyExtraFields } from "../changes/fields.ts";
 import { isFragmentFile, parseChange } from "../changes/fragments.ts";
 import {
@@ -54,13 +55,16 @@ async function inspectChangelog(project: Project): Promise<Problem[]> {
   }
 
   const parsed = parseChangelog(text);
-  return parsed.ok ? [] : parsed.problems.map((message) => ({ path, message }));
+  const messages = parsed.ok
+    ? releaseDataProblems(project, parsed.document)
+    : parsed.problems;
+  return messages.map((message) => ({ path, message }));
 }
 
 /**
  * Validates every unreleased fragment against the configured kinds and
- * extra fields, and the markers of the changelog. Unlike batch, it reports
- * every problem instead of stopping at the first one.
+ * extra fields, and the markers and data blocks of the changelog. Unlike
+ * batch, it reports every problem instead of stopping at the first one.
  */
 export async function checkProject(project: Project): Promise<CheckReport> {
   const directory = unreleasedPath(project);
