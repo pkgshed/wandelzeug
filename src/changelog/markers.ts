@@ -538,13 +538,19 @@ export function insertRelease(
 
 const DEFINITION_LABEL = /^\s*\[([^\]]+)\]:/;
 
-/** Lists the labels of the link definitions between the link markers. */
-export function definedLabels(document: ChangelogDocument): string[] {
+/** A link definition between the link markers, such as "[`1.0.0`]: https://...". */
+export type LinkDefinition = {
+  readonly label: string;
+  readonly line: string;
+};
+
+/** Lists the link definitions between the link markers. */
+export function linkDefinitions(document: ChangelogDocument): LinkDefinition[] {
   const links = document.links;
   if (links === undefined) return [];
   return document.lines.slice(links.begin + 1, links.end).flatMap((line) => {
     const label = DEFINITION_LABEL.exec(line)?.[1];
-    return label === undefined ? [] : [label];
+    return label === undefined ? [] : [{ label, line }];
   });
 }
 

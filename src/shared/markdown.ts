@@ -169,3 +169,39 @@ export const bracketedLabels = (markdown: string): string[] =>
   referenceTexts(lexer(markdown)).flatMap((text) =>
     [...text.matchAll(BRACKETED)].map((match) => match[1] ?? ""),
   );
+
+/** Collects the source of the links in tokens, without looking inside links. */
+function linkSources(tokens: readonly Token[]): string[] {
+  return tokens.flatMap((token) =>
+    token.type === "link" ? [token.raw] : linkSources(childTokens(token)),
+  );
+}
+
+const FULL_REFERENCE = /\]\[([^\]]*)\]$/;
+
+/**
+ * Reads the label of a reference link, such as "FOO-1" in "[FOO-1]",
+ * "[the bug][FOO-1]" or "[FOO-1][]". An inline link has no label.
+ */
+function referenceLabel(source: string): string | undefined {
+  if (source.includes("](")) return undefined;
+  const full = FULL_REFERENCE.exec(source)?.[1];
+  if (full === undefined) return source.slice(1, -1);
+  return full === "" ? source.slice(1, source.indexOf("][")) : full;
+}
+
+/**
+ * Finds the labels of the reference links in Markdown that resolve to one
+ * of the given link definitions, in the order of the text. marked resolves
+ * them, so code, escaped brackets and inline links count as Markdown says.
+ */
+export function referencedLabels(
+  markdown: string,
+  definitions: readonly string[],
+): string[] {
+  const tokens = lexer(`${markdown}\n\n${definitions.join("\n")}\n`);
+  return linkSources(tokens).flatMap((source) => {
+    const label = referenceLabel(source);
+    return label === undefined ? [] : [label];
+  });
+}

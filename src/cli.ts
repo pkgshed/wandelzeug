@@ -44,6 +44,7 @@ import {
   type ImportStop,
   planImport,
 } from "./changelog/import.ts";
+import { usedDefinitions, withDefinitions } from "./changelog/notes.ts";
 import { planRender, type RenderPlan } from "./changelog/render.ts";
 import {
   editorCommand,
@@ -53,7 +54,6 @@ import {
 } from "./changes/drafts.ts";
 import { loadFragments, recordChange } from "./changes/fragments.ts";
 import { readChangeOptions } from "./changes/options.ts";
-import { findReferences, withDefinitions } from "./changes/references.ts";
 import { askChange } from "./changes/questions.ts";
 import {
   type Invocation,
@@ -369,8 +369,8 @@ async function runShow(invocation: InvocationOf<"show">): Promise<void> {
   if (notes === undefined) {
     throw new Error(missingNotesMessage(project, document, invocation.release));
   }
-  const references = findReferences(project, notes);
-  process.stdout.write(`${withDefinitions(notes, references).trimEnd()}\n`);
+  const definitions = usedDefinitions(project, document, notes);
+  process.stdout.write(`${withDefinitions(notes, definitions).trimEnd()}\n`);
 }
 
 async function runNext(invocation: InvocationOf<"next">): Promise<void> {

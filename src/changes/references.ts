@@ -97,15 +97,3 @@ export function findReferences(project: Project, notes: string): Reference[] {
 /** Formats the Markdown link definition of a reference. */
 export const definitionLine = (reference: Reference): string =>
   `[${reference.label}]: ${reference.url}`;
-
-/**
- * Appends the definitions of the references that notes use, so the notes
- * keep their links outside the changelog, as in a tag message.
- */
-export const withDefinitions = (
-  notes: string,
-  references: readonly Reference[],
-): string =>
-  references.length === 0
-    ? notes
-    : `${notes.trimEnd()}\n\n${references.map(definitionLine).join("\n")}`;
