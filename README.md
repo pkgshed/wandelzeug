@@ -285,7 +285,7 @@ wandelzeug keeps its own changelog with wandelzeug. To record a change that user
 The source lives in TypeScript modules below `src/`, grouped by concern, with each module's tests next to it:
 
 - `src/cli.ts` is the entry point and runs the commands.
-- `src/cli/` holds the command line grammar, its help text, and the value parsers for options and arguments, built with [Optique](https://optique.dev).
+- `src/cli/` holds the command line grammar, its help text and colour theme, and the value parsers for options and arguments, built with [Optique](https://optique.dev).
 - `src/shared/` holds helpers, templates, slugs, and versions.
 - `src/project/` holds the configuration, project roots, `init`, `check`, `release`, and the replacements.
 - `src/changes/` holds change files, extra fields, and the input of `new`, including its questions and drafts.

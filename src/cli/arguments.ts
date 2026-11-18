@@ -27,6 +27,7 @@ import type { OptionName } from "@optique/core/usage";
 import { string } from "@optique/core/valueparser";
 import { version as WANDELZEUG_VERSION } from "../../package.json" with { type: "json" };
 import { UsageError } from "../shared/foundations.ts";
+import { HELP_THEME } from "./theme.ts";
 import {
   bumpValue,
   gitRefValue,
@@ -291,7 +292,7 @@ const HELP_DESCRIPTION = message`Run ${commandLine("wlz COMMAND --help")} for th
 
 /** How readCommandLine prints help output. */
 export type HelpOutput = {
-  /** Whether the help on stdout may carry the colours of Optique's default theme. */
+  /** Whether the help on stdout may carry the colours of the help theme. */
   readonly colors: boolean;
 };
 
@@ -306,6 +307,7 @@ export function readCommandLine(
   try {
     const invocation = runParserSync(WLZ, "wlz", argv, {
       colors: output.colors,
+      theme: HELP_THEME,
       brief: HELP_BRIEF,
       description: HELP_DESCRIPTION,
       usageLine: [

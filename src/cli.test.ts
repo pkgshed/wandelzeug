@@ -116,7 +116,10 @@ describe("command line", () => {
 
     const coloured = await runWith({ FORCE_COLOR: "1" }, "release", "--help");
     expect(coloured.exitCode).toBe(0);
-    expect(coloured.stdout).toContain("\x1b[3m--dry-run\x1b[0m");
+    // Cargo's styles: bold bright green headers, bold bright cyan literals, cyan placeholders.
+    expect(coloured.stdout).toContain("\x1b[1;92mUsage:\x1b[0m");
+    expect(coloured.stdout).toContain("\x1b[1;96m--dry-run\x1b[0m");
+    expect(coloured.stdout).toContain("\x1b[36mDATE\x1b[0m");
   });
 
   test("no command is a usage error", async () => {
