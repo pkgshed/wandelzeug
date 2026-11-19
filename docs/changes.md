@@ -50,7 +50,7 @@ kinds:
     breaking: ask
 ```
 
-For a kind that asks, the question defaults to no. Without a terminal, or with `--no-breaking`, the change does not break, and `--breaking` marks it as breaking without a question. In a draft, the kinds that ask get a `breaking:` line to fill in. `new` writes `breaking: true` into the file of every breaking change, including those of kinds that always break.
+For a kind that asks, the question defaults to no. `--breaking` and `--no-breaking` answer it without a question, and without a terminal, such a kind needs one of them, just as `new` needs `--kind`. A change file written by hand without a `breaking` entry does not break. In a draft, the kinds that ask get a `breaking:` line to fill in. `new` writes `breaking: true` into the file of every breaking change, including those of kinds that always break.
 
 A `breaking` entry must agree with the kind, so `check` reports `breaking: true` for a kind that never breaks, and `breaking: false` for a kind that always breaks.
 

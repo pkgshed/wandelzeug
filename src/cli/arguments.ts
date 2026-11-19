@@ -175,7 +175,7 @@ const newCommand = command(
   ),
   {
     brief: message`Record a change in the unreleased directory`,
-    description: message`When stdin is a terminal, new asks for whatever the options leave out: the kind, the body, whether the change breaks when its kind has breaking: ask, and each extra field. To leave an optional field empty without a question, pass ${optionName("--meta")} with an empty value, such as pr=. With ${optionName("--edit")}, the draft stays in .changes/.draft.md until the change is recorded, so ${optionName("--resume")} can reopen it after a problem.`,
+    description: message`When stdin is a terminal, new asks for whatever the options leave out: the kind, the body, whether the change breaks when its kind has breaking: ask, and each extra field. Without a terminal, such a kind needs ${optionName("--breaking")} or ${optionName("--no-breaking")}. To leave an optional field empty without a question, pass ${optionName("--meta")} with an empty value, such as pr=. With ${optionName("--edit")}, the draft stays in .changes/.draft.md until the change is recorded, so ${optionName("--resume")} can reopen it after a problem.`,
   },
 );
 

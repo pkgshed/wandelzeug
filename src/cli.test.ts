@@ -180,6 +180,7 @@ describe("command line", () => {
       "new",
       "-k",
       "fixed",
+      "--no-breaking",
       "-b",
       "* Crash on start",
       "-m",
@@ -198,7 +199,14 @@ describe("command line", () => {
   test("new records whether a change breaks, as its kind allows", async () => {
     await run("init");
     const breaking = await run("new", "-k", "Fixed", "--breaking", "-b", "* A");
-    const notBreaking = await run("new", "-k", "Fixed", "-b", "* B");
+    const notBreaking = await run(
+      "new",
+      "-k",
+      "Fixed",
+      "--no-breaking",
+      "-b",
+      "* B",
+    );
     const removed = await run("new", "-k", "Removed", "-b", "* C");
 
     const read = (result: { stdout: string }) =>
@@ -210,6 +218,16 @@ describe("command line", () => {
     expect(await read(removed)).toBe(
       "---\nkind: Removed\nbreaking: true\n---\n* C\n",
     );
+  });
+
+  test("new without a terminal needs an answer for a kind that asks whether it breaks", async () => {
+    await run("init");
+    const result = await run("new", "-k", "Fixed", "-b", "* Crash");
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain(
+      'missing --breaking or --no-breaking for kind "Fixed", and stdin is not a terminal to ask for it',
+    );
+    expect(await unreleasedFiles()).toEqual([".gitkeep"]);
   });
 
   test.each([
@@ -246,7 +264,7 @@ describe("command line", () => {
     await writeFile(join(root, "CHANGELOG.md"), "# History\n\n## [1.2.0]\n");
     await run("init");
     await run("new", "-k", "Fixed", "--breaking", "-b", "* Strict parsing");
-    await run("new", "-k", "Fixed", "-b", "* Crash");
+    await run("new", "-k", "Fixed", "--no-breaking", "-b", "* Crash");
     const result = await run("batch", "auto", "--date", "2026-11-17");
 
     expect(result.exitCode).toBe(0);
@@ -382,7 +400,7 @@ describe("command line", () => {
 
   test("show prints the notes of a release", async () => {
     await run("init", "--baseline", "1.0.0");
-    await run("new", "-k", "Fixed", "-b", "* Crash");
+    await run("new", "-k", "Fixed", "--no-breaking", "-b", "* Crash");
     await run("batch", "patch", "--date", "2026-11-17");
     expect((await run("latest")).stdout).toBe("1.0.1\n");
 
@@ -434,7 +452,14 @@ describe("command line", () => {
   test("new without a terminal needs every required field", async () => {
     await run("init");
     await writeConfig(root, PR_FIELD_CONFIG);
-    const missing = await run("new", "-k", "fixed", "-b", "* Crash");
+    const missing = await run(
+      "new",
+      "-k",
+      "fixed",
+      "--no-breaking",
+      "-b",
+      "* Crash",
+    );
     expect(missing.exitCode).toBe(2);
     expect(missing.stderr).toContain('missing required field "pr"');
 
@@ -442,6 +467,7 @@ describe("command line", () => {
       "new",
       "-k",
       "fixed",
+      "--no-breaking",
       "-b",
       "* Crash",
       "-m",
@@ -607,7 +633,7 @@ describe("command line", () => {
       ".changes/unreleased: no change file added or modified since main",
     );
 
-    await run("new", "-k", "Fixed", "-b", "* Crash");
+    await run("new", "-k", "Fixed", "--no-breaking", "-b", "* Crash");
     await commitAll(root, "record a change");
     expect(await run("check", "--since", "main")).toMatchObject({
       exitCode: 0,
@@ -650,7 +676,7 @@ describe("command line", () => {
       await run("init", "--repository", "https://codeberg.org/o/r");
       await run("new", "-k", "Added", "-b", "* Feature", "-m", "pr=42");
       await run("batch", "minor", "--date", "2026-11-17");
-      await run("new", "-k", "Fixed", "-b", "* Crash");
+      await run("new", "-k", "Fixed", "--no-breaking", "-b", "* Crash");
       await run("batch", "patch", "--date", "2026-11-18");
     }
 
@@ -854,9 +880,25 @@ describe("command line", () => {
     test("batch adds the definitions that the changelog lacks, and render keeps them", async () => {
       await projectWithLinks();
       await run("new", "-k", "Added", "-b", "* Thing", "-m", "issue=FOO-1234");
-      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1]", "-m", "pr=42");
+      await run(
+        "new",
+        "-k",
+        "Fixed",
+        "--no-breaking",
+        "-b",
+        "* Fixes [FOO-1]",
+        "-m",
+        "pr=42",
+      );
       await run("batch", "minor", "--date", "2026-11-17");
-      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1] and [FOO-9]");
+      await run(
+        "new",
+        "-k",
+        "Fixed",
+        "--no-breaking",
+        "-b",
+        "* Fixes [FOO-1] and [FOO-9]",
+      );
       await run("batch", "patch", "--date", "2026-11-18");
 
       const text = await changelog();
@@ -881,7 +923,16 @@ describe("command line", () => {
 
     test("show appends the definitions that its notes use, the release link first", async () => {
       await projectWithLinks();
-      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1]", "-m", "pr=42");
+      await run(
+        "new",
+        "-k",
+        "Fixed",
+        "--no-breaking",
+        "-b",
+        "* Fixes [FOO-1]",
+        "-m",
+        "pr=42",
+      );
       await run("batch", "minor", "--date", "2026-11-17");
 
       expect((await run("show", "0.1.0")).stdout).toBe(
@@ -1108,7 +1159,7 @@ describe("command line", () => {
 
     test("the tag helper gets the bump after the bump strategy", async () => {
       await projectWithFakeHelper();
-      await run("new", "-k", "Changed", "-b", "* Format");
+      await run("new", "-k", "Changed", "--breaking", "-b", "* Format");
       await commitAll(root, "record a breaking change");
 
       const result = await run("release", "auto", "--date", "2026-11-17");
@@ -1124,7 +1175,7 @@ describe("command line", () => {
         "extraFields: []",
         "extraFields:\n  - key: issue\n    pattern: 'FOO-\\d+'\n    url: \"https://jira.corp.com/browse/{{issue}}\"",
       );
-      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1]");
+      await run("new", "-k", "Fixed", "--no-breaking", "-b", "* Fixes [FOO-1]");
       await commitAll(root, "link issues");
 
       expect((await run("release", "auto")).exitCode).toBe(0);

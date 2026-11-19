@@ -50,11 +50,14 @@ async function askBody(): Promise<string> {
 /**
  * Decides whether a change breaks. A kind that always or never breaks
  * answers without a question. A kind that asks gets a question, which
- * defaults to no, and without a terminal the change does not break.
+ * defaults to no. Without a terminal, such a kind needs --breaking or
+ * --no-breaking, so a script cannot skip the decision by accident.
  */
 async function askBreaking(kind: Kind): Promise<boolean> {
   if (kind.breaking !== "ask") return kind.breaking === "yes";
-  if (!isInteractive()) return false;
+  requireTerminal(
+    `--breaking or --no-breaking for kind ${JSON.stringify(kind.label)}`,
+  );
   return askYesNo("Breaking change?", false);
 }
 
