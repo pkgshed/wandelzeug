@@ -1,0 +1,15 @@
+{
+  "name": "wandelzeug",
+  "description": "The wandelzeug skill, which records changelog entries with wlz",
+  "owner": {
+    "name": "pkgshed",
+    "url": "https://github.com/pkgshed"
+  },
+  "plugins": [
+    {
+      "name": "wandelzeug",
+      "source": "./plugins/wandelzeug",
+      "description": "Records user-facing changes as change files with wlz and words their changelog entries"
+    }
+  ]
+}

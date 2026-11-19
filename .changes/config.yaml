@@ -100,6 +100,9 @@ replacements:
   - path: package.json
     find: '^  "version": "[^"]*",$'
     replace: '  "version": "{{version}}",'
+  - path: plugins/wandelzeug/.claude-plugin/plugin.json
+    find: '^  "version": "[^"]*",$'
+    replace: '  "version": "{{version}}",'
 
 # How "auto" bumps while the latest release is 0.y.z, which Semantic
 # Versioning reserves for initial development. From 1.0.0 on, a breaking

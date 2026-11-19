@@ -1,0 +1,13 @@
+{
+  "name": "wandelzeug",
+  "version": "0.3.0",
+  "description": "Records user-facing changes as change files with wandelzeug, the wlz command, and words their changelog entries.",
+  "author": {
+    "name": "pkgshed",
+    "url": "https://github.com/pkgshed"
+  },
+  "homepage": "https://github.com/pkgshed/wandelzeug",
+  "repository": "https://github.com/pkgshed/wandelzeug",
+  "license": "0BSD",
+  "keywords": ["changelog", "keep-a-changelog", "semver", "wlz"]
+}
