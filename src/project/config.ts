@@ -496,7 +496,7 @@ const ConfigSchema = v.pipe(
     tagPrefix: setting(text, "v"),
     /** Web address of the repository for compare links. Empty turns the default links off. */
     repositoryUrl: setting(text, ""),
-    /** Mustache template for the fragment file name between "nnn-" and ".md". */
+    /** Mustache template for the fragment file name between "nnn-<id>-" and ".md". */
     fragmentName: setting(text, "{{kind}}-{{title}}"),
     /** Maximum length of the {{title}} slug in fragment file names. */
     titleMaxLength: setting(

@@ -12,8 +12,9 @@
  *     * Support for TOML config
  *
  * Each project keeps its configuration in .changes/config.yaml.
- * Unreleased changes live in .changes/unreleased/nnn-<name>.md. The number
- * nnn orders the changes, and <name> comes from the fragmentName template.
+ * Unreleased changes live in .changes/unreleased/nnn-<id>-<name>.md. The
+ * number nnn orders the changes, the random <id> keeps the files of
+ * parallel branches apart, and <name> comes from the fragmentName template.
  *
  * The changelog itself is the record of released versions. "wlz batch"
  * inserts each release below a <!-- wlz:releases --> anchor and wraps

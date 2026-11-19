@@ -75,7 +75,8 @@ repositoryUrl: ${yamlString(repositoryUrl)}
 # without HTML escaping. {{name}} inserts a value, and a section such as
 # {{#pr}}...{{/pr}} renders only when pr has a value.
 
-# Fragment file name between the "nnn-" sequence prefix and ".md".
+# Fragment file name between the "nnn-<id>-" prefix and ".md": the
+# sequence number, then a random ID against clashes between branches.
 # Values: title from the first body line, kind, and any front matter key
 # such as pr. Every value becomes a lower-case slug.
 fragmentName: ${yamlString(DEFAULT_CONFIG.fragmentName)}

@@ -14,7 +14,7 @@ pr: 42
 * Support for TOML config
 ```
 
-Change files live in `.changes/unreleased/nnn-NAME.md`. The number `nnn` orders the changes in the changelog: `new` takes the highest existing number plus one, padded to three digits, so the numbering starts again at `001` after a release. `NAME` comes from the `fragmentName` template, see [Templates](changelog.md#templates).
+Change files live in `.changes/unreleased/nnn-ID-NAME.md`, such as `001-k7m2q-added-support-for-toml-config.md`. The number `nnn` orders the changes in the changelog: `new` takes the highest existing number plus one, padded to three digits, so the numbering starts again at `001` after a release. `ID` is five random characters, so two branches that pick the same number still create different files and merge without a conflict. The characters come from [Crockford's base32](https://www.crockford.com/base32.html) alphabet in lower case, which works on file systems that ignore case and leaves out `i`, `l`, `o` and `u`, so an ID rarely spells a word. `NAME` comes from the `fragmentName` template, see [Templates](changelog.md#templates). File names without an ID, as wandelzeug 0.3.0 and older wrote them, stay valid.
 
 ## Record a change
 
