@@ -12,6 +12,20 @@ To see a version without writing anything, use one of the following commands:
 - `next BUMP` prints the version that a bump yields.
 - `batch VERSION --dry-run` prints the release, with its markers, that `batch` would insert.
 
+### Initial development
+
+Semantic Versioning reserves versions below 1.0.0 for initial development, where anything may change. While the latest stable release is 0.y.z, or nothing is released yet, the `bumpStrategy` setting decides how `auto` treats the bumps of the kinds:
+
+| Strategy | Major change | Minor change | Patch change |
+|---|---|---|---|
+| `minor-capped`, the default | minor | minor | patch |
+| `shifted` | minor | patch | patch |
+| `literal` | major | minor | patch |
+
+With `minor-capped`, a release with a `Changed` entry goes from 0.3.0 to 0.4.0 instead of 1.0.0. `shifted` follows how Cargo and the caret ranges of npm read 0.y.z versions, where the minor version marks incompatible changes. `literal` applies the bumps of the kinds as they are, so a major change releases 1.0.0.
+
+From 1.0.0 on, every strategy bumps as the kinds say. An explicit bump always applies as given, so to release 1.0.0, run `wlz release major` or `wlz batch 1.0.0`. The `{{bump}}` value of the tag helper holds the bump after the strategy, see [Choose how releases get tagged](#choose-how-releases-get-tagged).
+
 ## Release and tag
 
 `batch` only changes the changelog. To also commit the release and tag it, use `release`, which takes a bump: `major`, `minor`, `patch`, or `auto`:
@@ -48,7 +62,7 @@ The commands run in the project root without a shell. Each argument and each var
 | Value | Meaning |
 |-------|---------|
 | `version`, `date`, `tag`, `previousVersion`, `previousTag` | The values of `versionFormat` |
-| `bump` | The part of the version that the release bumps: `major`, `minor`, or `patch` |
+| `bump` | The part of the version that the release bumps: `major`, `minor`, or `patch`, after the `bumpStrategy` for `auto` |
 | `root` | The project root |
 | `message` | The tag message that `tagTemplate` renders |
 | `messageFile` | A file that holds the tag message |

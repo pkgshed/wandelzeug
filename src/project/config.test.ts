@@ -44,6 +44,10 @@ describe("configuration", () => {
     [{ changesdir: ".changes" }, /unknown setting "changesdir"/],
     [{ changesDir: ".changes" }, /unknown setting "changesDir"/],
     [{ titleMaxLength: 0 }, /titleMaxLength: must be a positive integer/],
+    [
+      { bumpStrategy: "cargo" },
+      /bumpStrategy: must be one of: minor-capped, shifted, literal/,
+    ],
     [{ kinds: [] }, /kinds: must be a non-empty list/],
     [{ kinds: ["Added", "added"] }, /duplicate label "added"/],
     [

@@ -146,6 +146,36 @@ describe("project workflow", () => {
     );
   });
 
+  test("a plan names the bump after the bump strategy", async () => {
+    await writeConfig(root, "");
+    await writeChangelog(root);
+    const project = await loadProject(root);
+    await recordChange(project, change("Changed", "* Format"));
+
+    const automatic = await planRelease(
+      project,
+      releaseTarget("auto"),
+      isoDate("2026-11-17"),
+    );
+    expect(automatic.values.version).toBe("0.1.0");
+    expect(automatic.bump).toBe("minor");
+
+    const explicit = await planRelease(
+      project,
+      releaseTarget("major"),
+      isoDate("2026-11-17"),
+    );
+    expect(explicit.values.version).toBe("1.0.0");
+    expect(explicit.bump).toBe("major");
+
+    const named = await planRelease(
+      project,
+      releaseTarget("2.0.0"),
+      isoDate("2026-11-17"),
+    );
+    expect(named.bump).toBeUndefined();
+  });
+
   test("the change format can link front matter values", async () => {
     await writeConfig(
       root,

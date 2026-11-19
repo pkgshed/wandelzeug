@@ -20,7 +20,6 @@ import {
   type Template,
   type TemplateView,
 } from "../shared/templates.ts";
-import type { Bump } from "../shared/versions.ts";
 import { changelogPath, type Project, unreleasedPath } from "./root.ts";
 
 /** The paths that the release commit holds, relative to the project root. */
@@ -75,16 +74,18 @@ async function checkTagIsNew(
   }
 }
 
-/** The values of the tag helper. The release commit only exists for the create step. */
+/**
+ * The values of the tag helper. The release commit only exists for the
+ * create step, and the bump only when the release came from one.
+ */
 const tagValues = (
   project: Project,
-  part: Bump,
   plan: ReleasePlan,
   messageFile: string,
   commit?: string,
 ): TemplateView => ({
   ...plan.values,
-  bump: part,
+  ...(plan.bump === undefined ? {} : { bump: plan.bump }),
   root: project.root,
   message: plan.tagMessage,
   messageFile,
@@ -144,7 +145,6 @@ async function runStep(
 /** Runs the checks of wandelzeug, then the check step of the tag helper if there is one. */
 async function runChecks(
   project: Project,
-  part: Bump,
   plan: ReleasePlan,
   messageFile: string,
 ): Promise<void> {
@@ -152,7 +152,7 @@ async function runChecks(
   await checkTagIsNew(project, plan);
   const { check } = project.templates.tagHelper;
   if (check === undefined) return;
-  const values = tagValues(project, part, plan, messageFile);
+  const values = tagValues(project, plan, messageFile);
   await runStep(project, "check", check, values);
 }
 
@@ -170,12 +170,11 @@ const removeMessageFile = (path: string): Promise<void> =>
 /** Checks a release as "wlz release" would, without changing anything. */
 export async function checkRelease(
   project: Project,
-  part: Bump,
   plan: ReleasePlan,
 ): Promise<void> {
   const messageFile = await writeMessageFile(plan);
   try {
-    await runChecks(project, part, plan, messageFile);
+    await runChecks(project, plan, messageFile);
   } finally {
     await removeMessageFile(messageFile);
   }
@@ -224,12 +223,11 @@ export type ReleaseResult = {
  */
 export async function releaseAndTag(
   project: Project,
-  part: Bump,
   plan: ReleasePlan,
 ): Promise<ReleaseResult> {
   const messageFile = await writeMessageFile(plan);
   try {
-    await runChecks(project, part, plan, messageFile);
+    await runChecks(project, plan, messageFile);
   } catch (error) {
     await removeMessageFile(messageFile);
     throw error;
@@ -238,7 +236,7 @@ export async function releaseAndTag(
   await writeRelease(plan);
   await removeFragments(plan.fragments);
   const commit = await commitRelease(project, plan);
-  const values = tagValues(project, part, plan, messageFile, commit.hash);
+  const values = tagValues(project, plan, messageFile, commit.hash);
   const { create } = project.templates.tagHelper;
   try {
     await runStep(project, "create", create, values);

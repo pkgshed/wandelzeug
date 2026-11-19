@@ -8,7 +8,7 @@ import { join } from "node:path";
 import * as v from "valibot";
 import { attempt, findDuplicate } from "../shared/foundations.ts";
 import { isFieldName } from "../shared/templates.ts";
-import { BUMPS } from "../shared/versions.ts";
+import { BUMP_STRATEGIES, BUMPS } from "../shared/versions.ts";
 
 /**
  * The directory that holds the configuration, the unreleased changes and
@@ -161,6 +161,11 @@ const lengthLimit = absent(
 // --- Kinds ------------------------------------------------------------------
 
 const bump = v.picklist(BUMPS, `must be one of: ${BUMPS.join(", ")}`);
+
+const bumpStrategy = v.picklist(
+  BUMP_STRATEGIES,
+  `must be one of: ${BUMP_STRATEGIES.join(", ")}`,
+);
 
 /** A kind of change, such as Added. A bare label in the list stands for a kind without a bump. */
 const KindSchema = v.pipe(
@@ -528,6 +533,8 @@ const ConfigSchema = v.pipe(
     releaseData: setting(v.boolean("must be true or false"), true),
     /** Files whose version numbers "batch" and "release" update with each release. */
     replacements: setting(v.array(ReplacementSchema, "must be a list"), []),
+    /** How "auto" bumps while the latest release is 0.y.z. */
+    bumpStrategy: setting(bumpStrategy, "minor-capped"),
     /** Kinds in changelog order. */
     kinds: v.optional(KindsSchema, DEFAULT_KINDS),
     /** Front matter entries that "new" asks for and "check" validates. */
