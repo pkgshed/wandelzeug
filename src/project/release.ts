@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import {
   type ReleasePlan,
-  removeFragments,
+  removeChangeFiles,
   writeRelease,
 } from "../changelog/releases.ts";
 import { errorMessage } from "../shared/foundations.ts";
@@ -234,7 +234,7 @@ export async function releaseAndTag(
   }
 
   await writeRelease(plan);
-  await removeFragments(plan.fragments);
+  await removeChangeFiles(plan);
   const commit = await commitRelease(project, plan);
   const values = tagValues(project, plan, messageFile, commit.hash);
   const { create } = project.templates.tagHelper;

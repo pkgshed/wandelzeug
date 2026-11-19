@@ -37,7 +37,7 @@ import {
   autoReleaseBump,
   nextVersion,
   planRelease,
-  removeFragments,
+  removeChangeFiles,
   writeRelease,
 } from "./changelog/releases.ts";
 import {
@@ -53,7 +53,7 @@ import {
   recordFromDraft,
   startDraft,
 } from "./changes/drafts.ts";
-import { loadFragments, recordChange } from "./changes/fragments.ts";
+import { loadUnreleased, recordChangeFile } from "./changes/fragments.ts";
 import { readChangeOptions } from "./changes/options.ts";
 import { askChange } from "./changes/questions.ts";
 import {
@@ -212,8 +212,21 @@ async function recordWithQuestions(
   invocation: WriteInvocation,
 ): Promise<string> {
   const options = await readChangeOptions(project.config.kinds, invocation);
-  const change = await askChange(project.config, options);
-  return recordChange(project, change);
+  return recordChangeFile(project, await askChange(project.config, options));
+}
+
+/** The invocation of "new" that records an empty change. */
+type EmptyInvocation = Extract<InvocationOf<"new">, { mode: "empty" }>;
+
+function recordEmptyChange(
+  project: Project,
+  invocation: EmptyInvocation,
+): Promise<string> {
+  const reason = invocation.reason?.trim() ?? "";
+  return recordChangeFile(project, {
+    type: "empty",
+    reason: reason === "" ? undefined : reason,
+  });
 }
 
 /** Records the change that the invocation describes and returns the path of its file. */
@@ -222,6 +235,8 @@ function recordNewChange(
   invocation: InvocationOf<"new">,
 ): Promise<string> {
   if (invocation.mode === "resume") return resumeDraft(project);
+  if (invocation.mode === "empty")
+    return recordEmptyChange(project, invocation);
   if (invocation.edit) return recordWithEditor(project, invocation);
   return recordWithQuestions(project, invocation);
 }
@@ -273,7 +288,11 @@ async function runCheck(invocation: InvocationOf<"check">): Promise<void> {
     failures.forEach((failure) => console.error(failure));
     throw new Error(`check: ${countOf(failures.length, "problem")}`);
   }
-  console.log(`checked ${countOf(report.checked, "change")}`);
+  const empty =
+    report.emptyChanges === 0
+      ? ""
+      : ` and ${countOf(report.emptyChanges, "empty change")}`;
+  console.log(`checked ${countOf(report.changes, "change")}${empty}`);
 }
 
 async function runBatch(invocation: InvocationOf<"batch">): Promise<void> {
@@ -288,10 +307,13 @@ async function runBatch(invocation: InvocationOf<"batch">): Promise<void> {
 
   await writeRelease(plan);
   if (!invocation.keep) {
-    await removeFragments(plan.fragments);
+    await removeChangeFiles(plan);
   }
   const changes = countOf(plan.fragments.length, "change");
   console.log(`updated ${displayPath(plan.path)} from ${changes}`);
+  if (!invocation.keep && plan.emptyChanges.length > 0) {
+    console.log(`removed ${countOf(plan.emptyChanges.length, "empty change")}`);
+  }
   plan.updates.forEach((update) =>
     console.log(`updated ${displayPath(update.path)}`),
   );
@@ -469,7 +491,11 @@ async function runNext(invocation: InvocationOf<"next">): Promise<void> {
   const releases = knownReleases(await readChangelog(project));
   const bump =
     invocation.bump === "auto"
-      ? autoReleaseBump(releases, await loadFragments(project), project.config)
+      ? autoReleaseBump(
+          releases,
+          (await loadUnreleased(project)).fragments,
+          project.config,
+        )
       : invocation.bump;
   const version = nextVersion(releases, bump);
   console.log(formatVersion(version, project.config.versionPrefix));

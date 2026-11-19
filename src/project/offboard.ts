@@ -5,15 +5,16 @@
  * definitions stay, so the changelog reads as before.
  */
 
-import { rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative } from "node:path";
 import {
   hasAnyMarker,
   type StrippedChangelog,
   stripMarkers,
 } from "../changelog/markers.ts";
-import { isFragmentFile } from "../changes/fragments.ts";
+import { isFragmentFile, parseChangeFile } from "../changes/fragments.ts";
 import {
+  attempt,
   countOf,
   displayPath,
   listDirectory,
@@ -65,15 +66,30 @@ function isInside(directory: string, path: string): boolean {
   return rest === "" || (!rest.startsWith("..") && !isAbsolute(rest));
 }
 
-/** Lists the unreleased change files, which off-boarding deletes only inside .changes. */
+/**
+ * Reports whether a fragment file holds recorded work. An empty change
+ * holds none, and a file that does not parse counts as work, so that
+ * nothing gets lost by accident.
+ */
+async function holdsWork(project: Project, path: string): Promise<boolean> {
+  const text = await readFile(path, "utf8");
+  const parsed = attempt(() => parseChangeFile(text, project.config.kinds));
+  return !parsed.ok || parsed.value.type !== "empty";
+}
+
+/** Lists the unreleased change files with work in them, which off-boarding deletes only inside .changes. */
 async function findUnreleasedChanges(
+  project: Project,
   unreleased: string | undefined,
 ): Promise<string[]> {
   if (unreleased === undefined) return [];
-  const fileNames = await listDirectory(unreleased);
-  return fileNames
+  const paths = (await listDirectory(unreleased))
     .filter(isFragmentFile)
     .map((fileName) => join(unreleased, fileName));
+  const withWork = await Promise.all(
+    paths.map((path) => holdsWork(project, path)),
+  );
+  return paths.filter((_, index) => withWork[index]);
 }
 
 async function findPendingWork(
@@ -83,7 +99,7 @@ async function findPendingWork(
   const draft = draftPath(project);
   const hasDraft = await Bun.file(draft).exists();
   return {
-    changes: await findUnreleasedChanges(unreleased),
+    changes: await findUnreleasedChanges(project, unreleased),
     draft: hasDraft ? draft : undefined,
   };
 }

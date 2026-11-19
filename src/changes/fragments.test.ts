@@ -3,13 +3,16 @@ import { autoBump } from "../changelog/releases.ts";
 import { DEFAULT_CONFIG } from "../project/config.ts";
 import { breakingChange, change, projectWith } from "../test-helpers.ts";
 import {
+  emptyFileName,
   encodeFragmentId,
   type FragmentId,
   fragmentFileName,
   nextSequence,
   parseChange,
+  parseChangeFile,
   randomFragmentId,
   serializeChange,
+  serializeEmptyChange,
 } from "./fragments.ts";
 
 describe("fragments", () => {
@@ -210,6 +213,43 @@ describe("fragments", () => {
   ])("a %p change rejects %p", (kind, entry, message) => {
     const text = `---\nkind: ${kind}\n${entry}\n---\n* Change\n`;
     expect(() => parseChange(text, kinds)).toThrow(message);
+  });
+
+  test.each([
+    ["---\nempty: true\n---\n", undefined],
+    ["---\nempty: true\n---\nRefactoring only\n", "Refactoring only"],
+    ["---\nempty: true\n---\nLine one\nLine two\n", "Line one\nLine two"],
+  ])("parseChangeFile reads the empty change %p", (text, reason) => {
+    expect(parseChangeFile(text, kinds)).toEqual({ type: "empty", reason });
+    expect(serializeEmptyChange({ type: "empty", reason })).toBe(text);
+  });
+
+  test("parseChangeFile reads a change as a change", () => {
+    expect(parseChangeFile(example, kinds)).toEqual({
+      type: "change",
+      change: change("Added", "* Support for TOML config", { pr: 42 }),
+    });
+  });
+
+  test.each([
+    ["---\nempty: false\n---\n", "empty must be true"],
+    ["---\nempty: yes\n---\n", "empty must be true"],
+    [
+      "---\nempty: true\nkind: Added\npr: 7\n---\n",
+      'an empty change holds nothing besides its reason, found "kind", "pr"',
+    ],
+  ])("parseChangeFile rejects %p", (text, message) => {
+    expect(() => parseChangeFile(text, kinds)).toThrow(message);
+  });
+
+  test("parseChange refuses an empty change", () => {
+    expect(() => parseChange("---\nempty: true\n---\n", kinds)).toThrow(
+      'empty: true marks an empty change, which "wlz new --empty" records',
+    );
+  });
+
+  test("an empty change gets a file name of its own", () => {
+    expect(emptyFileName(3, id)).toBe("003-k7m2q-empty.md");
   });
 
   test("serializeChange writes breaking only for a breaking change", () => {

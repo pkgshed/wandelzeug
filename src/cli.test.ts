@@ -300,6 +300,32 @@ describe("command line", () => {
     expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toBe(changelog);
   });
 
+  test.each([[[]], [["-C", "."]]])(
+    "new %p without options reaches the questions",
+    async (args) => {
+      await run("init");
+      const result = await run("new", ...args);
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr).toContain(
+        "missing --kind, and stdin is not a terminal to ask for it",
+      );
+    },
+  );
+
+  test.each([
+    [
+      ["-k", "Added", "--empty"],
+      '"-k" "Added" and "--empty" cannot be used together',
+    ],
+    [["--reason", "x"], "Required flag `--empty` is missing"],
+  ])("new %p fails to parse", async (args, message) => {
+    await run("init");
+    const result = await run("new", ...args);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain(message);
+    expect(await unreleasedFiles()).toEqual([".gitkeep"]);
+  });
+
   test("new without a terminal needs --kind", async () => {
     await run("init");
     const result = await run("new", "-b", "* Crash");
@@ -742,6 +768,102 @@ describe("command line", () => {
     expect(await run("check", "--since", "main")).toMatchObject({
       exitCode: 0,
       stdout: "checked 1 change\n",
+    });
+  });
+
+  describe("empty changes", () => {
+    const read = (result: { stdout: string }) =>
+      readFile(join(root, createdPath(result.stdout)), "utf8");
+
+    test("new --empty records an empty change, with an optional reason", async () => {
+      await run("init");
+      const bare = await run("new", "--empty");
+      const reasoned = await run(
+        "new",
+        "--empty",
+        "--reason",
+        "Refactoring only",
+      );
+
+      expect(masked(bare)).toMatchObject({
+        exitCode: 0,
+        stdout: "created .changes/unreleased/001-<id>-empty.md\n",
+      });
+      expect(await read(bare)).toBe("---\nempty: true\n---\n");
+      expect(masked(reasoned).stdout).toBe(
+        "created .changes/unreleased/002-<id>-empty.md\n",
+      );
+      expect(await read(reasoned)).toBe(
+        "---\nempty: true\n---\nRefactoring only\n",
+      );
+    });
+
+    test("an empty change satisfies check --since and counts on its own", async () => {
+      await run("init");
+      await writeConfig(root, PR_FIELD_CONFIG);
+      await startRepository(root);
+      await git(root, "switch", "--quiet", "--create", "feature");
+
+      await run("new", "--empty", "--reason", "CI only");
+      await commitAll(root, "skip the changelog");
+      expect(await run("check", "--since", "main")).toMatchObject({
+        exitCode: 0,
+        stdout: "checked 0 changes and 1 empty change\n",
+      });
+    });
+
+    test("check rejects an empty change with anything besides its reason", async () => {
+      await run("init");
+      await writeFile(
+        join(root, ".changes/unreleased/001-empty.md"),
+        "---\nempty: true\nkind: Added\n---\n",
+      );
+      const result = await run("check");
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        'an empty change holds nothing besides its reason, found "kind"',
+      );
+    });
+
+    test("batch drops empty changes, and refuses to release only them", async () => {
+      await run("init");
+      await run("new", "--empty");
+
+      const refused = await run("batch", "minor");
+      expect(refused.exitCode).toBe(1);
+      expect(refused.stderr).toContain(
+        "batch: no notable changes in .changes/unreleased, only 1 empty change",
+      );
+      expect(await unreleasedFiles()).toEqual([
+        ".gitkeep",
+        "001-<id>-empty.md",
+      ]);
+      expect((await run("next", "auto")).stderr).toContain(
+        "auto bump: no unreleased changes",
+      );
+
+      await run("new", "-k", "Added", "-b", "* Feature");
+      expect(await run("batch", "minor", "--date", "2026-11-19")).toMatchObject(
+        {
+          exitCode: 0,
+          stdout:
+            "updated CHANGELOG.md from 1 change\nremoved 1 empty change\n",
+        },
+      );
+      expect(await unreleasedFiles()).toEqual([".gitkeep"]);
+      expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).not.toContain(
+        "empty",
+      );
+    });
+
+    test("offboard deletes empty changes without asking for --force", async () => {
+      await run("init");
+      await run("new", "--empty");
+      expect(await run("offboard")).toMatchObject({
+        exitCode: 0,
+        stdout:
+          "kept the markers in CHANGELOG.md, which --strip-markers removes\nremoved .changes\n",
+      });
     });
   });
 
@@ -1257,6 +1379,25 @@ describe("command line", () => {
           "M\tpackage.json",
           "",
         ].join("\n"),
+      );
+      expect(await gitOutput(root, "status", "--porcelain")).toBe("");
+    });
+
+    test("the release commit deletes empty changes too", async () => {
+      await projectWithFakeHelper();
+      await run("new", "--empty");
+      await commitAll(root, "skip the changelog");
+
+      expect((await run("release", "auto")).exitCode).toBe(0);
+      const changed = await gitOutput(
+        root,
+        "show",
+        "--name-status",
+        "--format=",
+        "HEAD",
+      );
+      expect(maskFragmentIds(changed)).toContain(
+        "D\t.changes/unreleased/002-<id>-empty.md\n",
       );
       expect(await gitOutput(root, "status", "--porcelain")).toBe("");
     });
