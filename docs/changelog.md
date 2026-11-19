@@ -91,7 +91,7 @@ The default settings follow [Keep a Changelog 1.1.0](https://keepachangelog.com/
 
 ## Templates
 
-Templates use [Mustache](https://mustache.github.io/mustache.5.html) without HTML escaping, so Markdown such as `&` or `` ` `` passes through unchanged. `{{name}}` inserts a value, and a section such as `{{#pr}}...{{/pr}}` renders only when the value is set. A missing value renders empty. For example, `{{#pr}}{{pr}}-{{/pr}}{{kind}}-{{title}}` yields `001-42-added-support-for-toml-config.md` with a `pr` value and `001-added-support-for-toml-config.md` without one. A boolean front matter entry works as a switch, as in `{{#breaking}}**Breaking:** {{/breaking}}`.
+Templates use [Mustache](https://mustache.github.io/mustache.5.html) without HTML escaping, so Markdown such as `&` or `` ` `` passes through unchanged. `{{name}}` inserts a value, and a section such as `{{#pr}}...{{/pr}}` renders only when the value is set. A missing value renders empty. For example, `{{#pr}}{{pr}}-{{/pr}}{{kind}}-{{title}}` yields `001-k7m2q-42-added-support-for-toml-config.md` with a `pr` value and `001-k7m2q-added-support-for-toml-config.md` without one. A boolean front matter entry works as a switch, as in `{{#breaking}}**Breaking:** {{/breaking}}`.
 
 The following settings in `.changes/config.yaml` are templates:
 

@@ -8,7 +8,9 @@ import {
   commitAll,
   git,
   gitOutput,
+  createdPath,
   GIT_ENV,
+  maskFragmentIds,
   PR_FIELD_CONFIG,
   SCRIPT,
   startRepository,
@@ -48,8 +50,19 @@ describe("command line", () => {
 
   const run = (...args: string[]) => runWith({}, ...args);
 
+  /** A result with "<id>" in place of the random IDs of fragment file names. */
+  const masked = <Result extends { stdout: string }>(
+    result: Result,
+  ): Result => ({
+    ...result,
+    stdout: maskFragmentIds(result.stdout),
+  });
+
+  /** The files in the unreleased directory, with "<id>" in place of their random IDs. */
   const unreleasedFiles = async (): Promise<string[]> =>
-    (await readdir(join(root, ".changes", "unreleased"))).sort();
+    (await readdir(join(root, ".changes", "unreleased")))
+      .map(maskFragmentIds)
+      .sort();
 
   /** Sets EDITOR to a script that saves the draft it sees and writes the given text instead. */
   async function editorWriting(text: string): Promise<Record<string, string>> {
@@ -174,14 +187,11 @@ describe("command line", () => {
       "-m",
       "mr=",
     );
-    expect(result).toMatchObject({
+    expect(masked(result)).toMatchObject({
       exitCode: 0,
-      stdout: "created .changes/unreleased/001-fixed-crash-on-start.md\n",
+      stdout: "created .changes/unreleased/001-<id>-fixed-crash-on-start.md\n",
     });
-    const text = await readFile(
-      join(root, ".changes/unreleased/001-fixed-crash-on-start.md"),
-      "utf8",
-    );
+    const text = await readFile(join(root, createdPath(result.stdout)), "utf8");
     expect(text).toBe("---\nkind: Fixed\npr: 7\n---\n* Crash on start\n");
   });
 
@@ -222,9 +232,7 @@ describe("command line", () => {
         "",
       ].join("\n"),
     });
-    expect(await readdir(join(root, ".changes/unreleased"))).toContain(
-      "001-added-feature.md",
-    );
+    expect(await unreleasedFiles()).toContain("001-<id>-added-feature.md");
     expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).not.toContain(
       "0.1.0",
     );
@@ -254,7 +262,7 @@ describe("command line", () => {
     expect(result.stderr).toContain(
       "replace in package.json: replacements[0].find: no match",
     );
-    expect(await unreleasedFiles()).toContain("001-added-feature.md");
+    expect(await unreleasedFiles()).toContain("001-<id>-added-feature.md");
     expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).not.toContain(
       "0.1.0",
     );
@@ -351,10 +359,7 @@ describe("command line", () => {
       "pr=#42",
     );
     expect(given.exitCode).toBe(0);
-    const text = await readFile(
-      join(root, ".changes/unreleased/001-fixed-crash.md"),
-      "utf8",
-    );
+    const text = await readFile(join(root, createdPath(given.stdout)), "utf8");
     expect(text).toBe("---\nkind: Fixed\npr: 42\n---\n* Crash\n");
   });
 
@@ -366,9 +371,9 @@ describe("command line", () => {
     );
 
     const result = await runWith(editor, "new", "--edit", "-k", "fixed");
-    expect(result).toMatchObject({
+    expect(masked(result)).toMatchObject({
       exitCode: 0,
-      stdout: "created .changes/unreleased/001-fixed-crash-on-start.md\n",
+      stdout: "created .changes/unreleased/001-<id>-fixed-crash-on-start.md\n",
     });
     expect(await readFile(join(root, "seen-draft.md"), "utf8")).toContain(
       "kind: Fixed\npr: # Pull request number (int, required)\n---\n* \n",
@@ -376,10 +381,7 @@ describe("command line", () => {
     expect(await Bun.file(join(root, ".changes/.draft.md")).exists()).toBe(
       false,
     );
-    const text = await readFile(
-      join(root, ".changes/unreleased/001-fixed-crash-on-start.md"),
-      "utf8",
-    );
+    const text = await readFile(join(root, createdPath(result.stdout)), "utf8");
     expect(text).toBe("---\nkind: Fixed\npr: 7\n---\n* Crash on start\n");
   });
 
@@ -419,15 +421,12 @@ describe("command line", () => {
 
     const addPr = { EDITOR: `sed -i "s/^kind: Fixed$/kind: Fixed\\npr: 9/"` };
     const resumed = await runWith(addPr, "new", "--resume");
-    expect(resumed).toMatchObject({
+    expect(masked(resumed)).toMatchObject({
       exitCode: 0,
-      stdout: "created .changes/unreleased/001-fixed-crash.md\n",
+      stdout: "created .changes/unreleased/001-<id>-fixed-crash.md\n",
     });
     expect(
-      await readFile(
-        join(root, ".changes/unreleased/001-fixed-crash.md"),
-        "utf8",
-      ),
+      await readFile(join(root, createdPath(resumed.stdout)), "utf8"),
     ).toBe("---\nkind: Fixed\npr: 9\n---\n* Crash\n");
     expect(await Bun.file(draft).exists()).toBe(false);
   });
@@ -1001,9 +1000,9 @@ describe("command line", () => {
         "--format=",
         "HEAD",
       );
-      expect(changed).toBe(
+      expect(maskFragmentIds(changed)).toBe(
         [
-          "D\t.changes/unreleased/001-added-feature.md",
+          "D\t.changes/unreleased/001-<id>-added-feature.md",
           "M\tCHANGELOG.md",
           "M\tpackage.json",
           "",

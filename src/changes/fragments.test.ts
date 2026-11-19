@@ -3,9 +3,12 @@ import { autoBump } from "../changelog/releases.ts";
 import { DEFAULT_CONFIG } from "../project/config.ts";
 import { change, projectWith } from "../test-helpers.ts";
 import {
+  encodeFragmentId,
+  type FragmentId,
   fragmentFileName,
   nextSequence,
   parseChange,
+  randomFragmentId,
   serializeChange,
 } from "./fragments.ts";
 
@@ -88,14 +91,45 @@ describe("fragments", () => {
     expect(() => parseChange(text, kinds)).toThrow(message);
   });
 
-  test("the default file name joins sequence, kind and title", () => {
+  const id = "k7m2q" as FragmentId;
+
+  test("the default file name joins sequence, ID, kind and title", () => {
     const project = projectWith({});
     const fileName = fragmentFileName(
       project,
       1,
+      id,
       change("Added", "* Support for TOML config"),
     );
-    expect(fileName).toBe("001-added-support-for-toml-config.md");
+    expect(fileName).toBe("001-k7m2q-added-support-for-toml-config.md");
+  });
+
+  test("an empty fragmentName leaves sequence and ID", () => {
+    const project = projectWith({ fragmentName: "" });
+    const fileName = fragmentFileName(project, 12, id, change("Fixed", "* A"));
+    expect(fileName).toBe("012-k7m2q.md");
+  });
+
+  test("encodeFragmentId maps the low five bits of each byte to Crockford's base32", () => {
+    const encoded: string = encodeFragmentId(
+      Uint8Array.of(0, 9, 10, 31, 0b1110_0001),
+    );
+    expect(encoded).toBe("09az1");
+  });
+
+  test("encodeFragmentId skips i, l, o and u", () => {
+    const encoded: string = encodeFragmentId(Uint8Array.of(18, 19, 20, 21, 27));
+    expect(encoded).toBe("jkmnv");
+  });
+
+  test.each([0, 4, 6])("encodeFragmentId rejects %p bytes", (length) => {
+    expect(() => encodeFragmentId(new Uint8Array(length))).toThrow(
+      `a fragment ID needs 5 bytes, got ${length}`,
+    );
+  });
+
+  test("randomFragmentId draws five characters of Crockford's base32", () => {
+    expect(randomFragmentId()).toMatch(/^[0-9a-hjkmnp-tv-z]{5}$/);
   });
 
   test("an optional pull request appears only when given", () => {
@@ -105,11 +139,11 @@ describe("fragments", () => {
     });
     const withPr = change("Fixed", "* Crash on empty input", { pr: 42 });
     const withoutPr = change("Fixed", "* Crash on empty input");
-    expect(fragmentFileName(project, 7, withPr)).toBe(
-      "007-42-fixed-crash-on.md",
+    expect(fragmentFileName(project, 7, id, withPr)).toBe(
+      "007-k7m2q-42-fixed-crash-on.md",
     );
-    expect(fragmentFileName(project, 7, withoutPr)).toBe(
-      "007-fixed-crash-on.md",
+    expect(fragmentFileName(project, 7, id, withoutPr)).toBe(
+      "007-k7m2q-fixed-crash-on.md",
     );
   });
 
@@ -119,7 +153,7 @@ describe("fragments", () => {
       nextSequence([
         ".gitkeep",
         "001-a.md",
-        "010-b.md",
+        "010-k7m2q-b.md",
         "notes.txt",
         "x.md",
         "011.txt",

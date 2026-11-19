@@ -87,6 +87,20 @@ export async function writeConfig(root: string, text: string): Promise<void> {
 export const projectWith = (settings: Record<string, unknown>) =>
   createProject("/project", settings);
 
+/**
+ * Replaces the random ID in fragment file names with "<id>", so tests can
+ * compare names such as "001-<id>-fixed-crash.md".
+ */
+export const maskFragmentIds = (text: string): string =>
+  text.replace(/(\d{3})-[0-9a-hjkmnp-tv-z]{5}(?=-|\.md)/g, "$1-<id>");
+
+/** Reads the path that "wlz new" printed after "created". */
+export function createdPath(stdout: string): string {
+  const path = /^created (.+)$/m.exec(stdout)?.[1];
+  if (path === undefined) throw new Error(`no created path in ${stdout}`);
+  return path;
+}
+
 export function gitRef(text: string): GitRef {
   const ref = parseGitRef(text);
   if (ref === undefined) throw new Error(`test revision ${text} is invalid`);

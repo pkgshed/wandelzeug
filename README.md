@@ -62,7 +62,7 @@ To keep wandelzeug inside another repository instead, download the single execut
    wlz new --kind Added --body "* Support for TOML config"
    ```
 
-   The change lands in `.changes/unreleased/001-added-support-for-toml-config.md`. Without options, `wlz new` asks for the kind and the body.
+   The change lands in a file such as `.changes/unreleased/001-k7m2q-added-support-for-toml-config.md`. Without options, `wlz new` asks for the kind and the body.
 
 3. When you ship, add the collected changes to the changelog as the next release:
 

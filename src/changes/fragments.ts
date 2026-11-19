@@ -153,6 +153,42 @@ export function serializeChange(change: Change): string {
 const SEQUENCE_PREFIX = /^(\d+)(?=-|\.md$)/;
 const SEQUENCE_WIDTH = 3;
 
+/**
+ * A random ID in a fragment file name, such as "k7m2q": five characters of
+ * Crockford's base32 in lower case. Branches that record a change at the
+ * same time often pick the same sequence number, and the ID keeps their
+ * file names apart, so git merges them without a conflict.
+ */
+export type FragmentId = string & { readonly __brand: "FragmentId" };
+
+const FRAGMENT_ID_LENGTH = 5;
+
+/**
+ * Crockford's base32 alphabet in lower case. It works on file systems that
+ * ignore case, and it leaves out i, l, o and u, so IDs rarely spell words.
+ */
+const CROCKFORD_BASE32 = "0123456789abcdefghjkmnpqrstvwxyz";
+
+/**
+ * Encodes five random bytes as an ID, one character per byte from its low
+ * five bits. 256 is a multiple of 32, so every character is equally likely.
+ */
+export function encodeFragmentId(bytes: Uint8Array): FragmentId {
+  if (bytes.length !== FRAGMENT_ID_LENGTH) {
+    throw new Error(
+      `a fragment ID needs ${FRAGMENT_ID_LENGTH} bytes, got ${bytes.length}`,
+    );
+  }
+  const characters = Array.from(bytes, (byte) =>
+    CROCKFORD_BASE32.charAt(byte & 0b11111),
+  );
+  return characters.join("") as FragmentId;
+}
+
+/** Draws a new random ID for a fragment file name. */
+export const randomFragmentId = (): FragmentId =>
+  encodeFragmentId(crypto.getRandomValues(new Uint8Array(FRAGMENT_ID_LENGTH)));
+
 export const isFragmentFile = (fileName: string): boolean =>
   fileName.endsWith(".md") && !fileName.startsWith(".");
 
@@ -183,13 +219,14 @@ function fragmentNameValues(
   };
 }
 
-/** Builds the file name "nnn-<fragmentName>.md" for a change. */
+/** Builds the file name "nnn-<id>-<fragmentName>.md" for a change. */
 export function fragmentFileName(
   project: Project,
   sequence: number,
+  id: FragmentId,
   change: Change,
 ): string {
-  const prefix = String(sequence).padStart(SEQUENCE_WIDTH, "0");
+  const prefix = `${String(sequence).padStart(SEQUENCE_WIDTH, "0")}-${id}`;
   const values = fragmentNameValues(change, project.config.titleMaxLength);
   const name = renderTemplate(project.templates.fragmentName, values);
   return name === "" ? `${prefix}.md` : `${prefix}-${name}.md`;
@@ -203,7 +240,13 @@ export async function recordChange(
   const directory = unreleasedPath(project);
   await mkdir(directory, { recursive: true });
   const sequence = nextSequence(await listDirectory(directory));
-  const path = join(directory, fragmentFileName(project, sequence, change));
+  const fileName = fragmentFileName(
+    project,
+    sequence,
+    randomFragmentId(),
+    change,
+  );
+  const path = join(directory, fileName);
   await writeFile(path, serializeChange(change), { flag: "wx" });
   return path;
 }

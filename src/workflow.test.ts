@@ -29,6 +29,7 @@ import {
   git,
   gitRef,
   isoDate,
+  maskFragmentIds,
   PR_FIELD_CONFIG,
   release,
   releaseTarget,
@@ -48,8 +49,11 @@ describe("project workflow", () => {
     await rm(root, { recursive: true, force: true });
   });
 
+  /** The files in the unreleased directory, with "<id>" in place of their random IDs. */
   const unreleasedFiles = async (): Promise<string[]> =>
-    (await readdir(join(root, ".changes", "unreleased"))).sort();
+    (await readdir(join(root, ".changes", "unreleased")))
+      .map(maskFragmentIds)
+      .sort();
 
   test("init, new and batch add releases and links to the changelog", async () => {
     await initProject(root, { repositoryUrl: "https://codeberg.org/o/r" });
@@ -62,9 +66,9 @@ describe("project workflow", () => {
     await recordChange(project, change("Added", "* A dry-run flag for batch"));
     expect(await unreleasedFiles()).toEqual([
       ".gitkeep",
-      "001-fixed-crash-on-empty-input.md",
-      "002-added-support-for-toml-config.md",
-      "003-added-a-dry-run-flag-for-batch.md",
+      "001-<id>-fixed-crash-on-empty-input.md",
+      "002-<id>-added-support-for-toml-config.md",
+      "003-<id>-added-a-dry-run-flag-for-batch.md",
     ]);
 
     const first = await planRelease(
@@ -474,8 +478,9 @@ describe("project workflow", () => {
     expect(await changedFragments(project, gitRef("main"))).toEqual([]);
 
     await commitAll(root, "record a change");
-    expect(await changedFragments(project, gitRef("main"))).toEqual([
-      ".changes/unreleased/001-fixed-crash.md",
+    const changed = await changedFragments(project, gitRef("main"));
+    expect(changed.map(maskFragmentIds)).toEqual([
+      ".changes/unreleased/001-<id>-fixed-crash.md",
     ]);
   });
 
