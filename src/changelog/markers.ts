@@ -151,6 +151,10 @@ function classifyLine(line: string): Marker | undefined {
   return ANY_MARKER.test(text) ? { type: "unknown" } : undefined;
 }
 
+/** Reports whether a changelog holds any wandelzeug marker or data block. */
+export const hasAnyMarker = (text: string): boolean =>
+  text.split(/\r?\n/).some((line) => classifyLine(line) !== undefined);
+
 /** Reports whether a changelog holds the release anchor or the BEGIN marker of the links. */
 export const hasMarker = (text: string, type: "anchor" | "links"): boolean => {
   const wanted = type === "anchor" ? "anchor" : "linksBegin";
@@ -576,6 +580,110 @@ export function replaceLines(
     document.lines,
   );
   return lines.join(document.newline);
+}
+
+/** What stripMarkers made of a changelog. */
+export type StrippedChangelog = {
+  readonly text: string;
+  /** The number of marker lines that it removed. */
+  readonly markers: number;
+  /** The number of data blocks that it removed. */
+  readonly dataBlocks: number;
+};
+
+/** The lines of a changelog that hold markers and data blocks. */
+type MarkerLines = {
+  readonly removed: ReadonlySet<number>;
+  readonly markers: number;
+  readonly dataBlocks: number;
+};
+
+/** Finds the line that closes the data block starting at the given line. */
+function dataBlockEnd(lines: readonly string[], start: number): number {
+  const close = lines.findIndex(
+    (line, index) => index > start && line.trim() === DATA_END,
+  );
+  if (close === -1) {
+    throw new Error(
+      `line ${start + 1}: the data block lacks its closing ${DATA_END} line`,
+    );
+  }
+  return close;
+}
+
+/**
+ * Finds every marker line and data block, whether or not the markers pair
+ * up. A data block without its closing line is an error, because the rest
+ * of the file would go with it.
+ */
+function findMarkerLines(lines: readonly string[]): MarkerLines {
+  const removed = new Set<number>();
+  let markers = 0;
+  let dataBlocks = 0;
+  let index = 0;
+  while (index < lines.length) {
+    const marker = classifyLine(lines[index] ?? "");
+    if (marker === undefined) {
+      index += 1;
+      continue;
+    }
+    if (marker.type !== "data") {
+      removed.add(index);
+      markers += 1;
+      index += 1;
+      continue;
+    }
+    const close = dataBlockEnd(lines, index);
+    for (let line = index; line <= close; line += 1) removed.add(line);
+    dataBlocks += 1;
+    index = close + 1;
+  }
+  return { removed, markers, dataBlocks };
+}
+
+const isBlankLine = (line: string): boolean => line.trim() === "";
+
+/**
+ * Keeps the lines that are not removed. Where a removal leaves a blank
+ * line right after another one, or at the top of the file, that blank
+ * line goes too, so the notes keep the spacing that they had around the
+ * markers.
+ */
+function keepLines(
+  lines: readonly string[],
+  removed: ReadonlySet<number>,
+): string[] {
+  const kept: string[] = [];
+  let afterRemoval = false;
+  for (const [index, line] of lines.entries()) {
+    if (removed.has(index)) {
+      afterRemoval = true;
+      continue;
+    }
+    const previous = kept.at(-1);
+    const followsBlank = previous === undefined || isBlankLine(previous);
+    const doublesBlank = afterRemoval && isBlankLine(line) && followsBlank;
+    afterRemoval = false;
+    if (!doublesBlank) kept.push(line);
+  }
+  return kept;
+}
+
+/**
+ * Removes every wandelzeug marker and data block from a changelog, for a
+ * project that stops using wandelzeug. The notes and the link definitions
+ * stay. Unlike parseChangelog, it does not need the markers to pair up, so
+ * it also cleans a changelog with marker problems.
+ */
+export function stripMarkers(text: string): StrippedChangelog {
+  const newline = text.includes("\r\n") ? "\r\n" : "\n";
+  const lines = text.split(/\r?\n/);
+  const { removed, markers, dataBlocks } = findMarkerLines(lines);
+  return {
+    text: keepLines(lines, removed).join(newline),
+    markers,
+    dataBlocks,
+  };
 }
 
 export const MISSING_CHANGELOG = 'no such file, run "wlz init" to create it';

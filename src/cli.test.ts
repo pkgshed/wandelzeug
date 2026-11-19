@@ -373,6 +373,97 @@ describe("command line", () => {
     );
   });
 
+  describe("offboard", () => {
+    const changelog = () => readFile(join(root, "CHANGELOG.md"), "utf8");
+    const configExists = () =>
+      Bun.file(join(root, ".changes/config.yaml")).exists();
+
+    /** Sets up a project with a release, so the changelog holds markers and a data block. */
+    async function projectWithRelease(): Promise<void> {
+      await run("init", "--repository", "https://github.com/o/r");
+      await run("new", "-k", "Added", "-b", "* Feature");
+      await run("batch", "minor", "--date", "2026-11-19");
+    }
+
+    test("it removes .changes and keeps the changelog with its markers", async () => {
+      await projectWithRelease();
+      const before = await changelog();
+
+      expect(await run("offboard")).toMatchObject({
+        exitCode: 0,
+        stdout:
+          "kept the markers in CHANGELOG.md, which --strip-markers removes\nremoved .changes\n",
+      });
+      expect(await configExists()).toBe(false);
+      expect(await changelog()).toBe(before);
+    });
+
+    test("it refuses to delete unreleased changes and a kept draft", async () => {
+      await run("init");
+      await run("new", "-k", "Added", "-b", "* Feature");
+      await writeFile(
+        join(root, ".changes/.draft.md"),
+        "---\nkind:\n---\n* \n",
+      );
+
+      const result = await run("offboard");
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        'offboard: .changes holds 1 unreleased change and a draft. To keep that work, release the changes with "wlz batch" or "wlz release" and record the draft with "wlz new --resume" first. To delete it, pass --force',
+      );
+      expect(await configExists()).toBe(true);
+    });
+
+    test("--dry-run lists what it would do and changes nothing", async () => {
+      await projectWithRelease();
+      await run("new", "-k", "Added", "-b", "* Another");
+      const before = await changelog();
+
+      expect(
+        await run("offboard", "--strip-markers", "--force", "--dry-run"),
+      ).toMatchObject({
+        exitCode: 0,
+        stdout: [
+          "would update CHANGELOG.md (remove 5 markers and 1 data block)",
+          "would remove .changes with 1 unreleased change",
+          "",
+        ].join("\n"),
+      });
+      expect(await configExists()).toBe(true);
+      expect(await changelog()).toBe(before);
+    });
+
+    test("--strip-markers leaves a plain changelog", async () => {
+      await projectWithRelease();
+      await run("new", "-k", "Added", "-b", "* Another");
+
+      const result = await run("offboard", "--strip-markers", "--force");
+      expect(result).toMatchObject({
+        exitCode: 0,
+        stdout: [
+          "updated CHANGELOG.md (removed 5 markers and 1 data block)",
+          "removed .changes with 1 unreleased change",
+          "",
+        ].join("\n"),
+      });
+      expect(await configExists()).toBe(false);
+      expect(await changelog()).toEndWith(
+        [
+          "",
+          "## [`0.1.0`] (2026-11-19)",
+          "",
+          "### Added",
+          "",
+          "* Feature",
+          "",
+          "[`0.1.0`]: https://github.com/o/r/releases/tag/v0.1.0",
+          "",
+        ].join("\n"),
+      );
+      expect(await changelog()).not.toContain("wlz:");
+    });
+  });
+
   test("next and latest start from the baseline of an onboarded changelog", async () => {
     await writeFile(join(root, "CHANGELOG.md"), "# History\n\n## [1.2.3]\n");
     expect((await run("init")).stdout).toContain(

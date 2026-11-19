@@ -66,6 +66,14 @@ import {
   checkProject,
   type GitRef,
 } from "./project/checks.ts";
+import {
+  applyOffboarding,
+  type ChangelogOutcome,
+  describePendingWork,
+  type OffboardPlan,
+  planOffboarding,
+  refusePendingWork,
+} from "./project/offboard.ts";
 import { checkRelease, releaseAndTag } from "./project/release.ts";
 import {
   changelogPath,
@@ -318,6 +326,90 @@ async function runRender(invocation: InvocationOf<"render">): Promise<void> {
   if (kept !== undefined) console.log(kept);
 }
 
+/** The words for what offboard does: done, or planned with --dry-run. */
+type OffboardWording = {
+  readonly remove: string;
+  readonly update: string;
+  readonly keep: string;
+  /** The verb inside the details of an update. */
+  readonly removeDetail: string;
+};
+
+const OFFBOARD_DONE: OffboardWording = {
+  remove: "removed",
+  update: "updated",
+  keep: "kept",
+  removeDetail: "removed",
+};
+
+const OFFBOARD_PLANNED: OffboardWording = {
+  remove: "would remove",
+  update: "would update",
+  keep: "would keep",
+  removeDetail: "remove",
+};
+
+function describeChangelogOutcome(
+  outcome: ChangelogOutcome,
+  words: OffboardWording,
+): string[] {
+  switch (outcome.action) {
+    case "none":
+      return [];
+    case "keep markers":
+      return [
+        `${words.keep} the markers in ${displayPath(outcome.path)}, which --strip-markers removes`,
+      ];
+    case "strip": {
+      const markers = countOf(outcome.stripped.markers, "marker");
+      const dataBlocks = countOf(outcome.stripped.dataBlocks, "data block");
+      return [
+        `${words.update} ${displayPath(outcome.path)} (${words.removeDetail} ${markers} and ${dataBlocks})`,
+      ];
+    }
+  }
+}
+
+/** Describes an off-boarding, one line for each file or directory. */
+function describeOffboarding(
+  plan: OffboardPlan,
+  words: OffboardWording,
+): string[] {
+  const pending = describePendingWork(plan.pending);
+  const withPending = pending === undefined ? "" : ` with ${pending}`;
+  const changes = displayPath(plan.changesPath);
+  const outside =
+    plan.outsideUnreleased === undefined
+      ? []
+      : [
+          `${words.keep} ${displayPath(plan.outsideUnreleased)}, the unreleased directory outside ${changes}`,
+        ];
+  return [
+    ...describeChangelogOutcome(plan.changelog, words),
+    `${words.remove} ${changes}${withPending}`,
+    ...outside,
+  ];
+}
+
+async function runOffboard(
+  invocation: InvocationOf<"offboard">,
+): Promise<void> {
+  const project = await openInvocationProject(invocation);
+  const plan = await planOffboarding(project, {
+    stripMarkers: invocation.stripMarkers,
+  });
+  if (!invocation.force) refusePendingWork(plan);
+  if (invocation.dryRun) {
+    describeOffboarding(plan, OFFBOARD_PLANNED).forEach((line) =>
+      console.log(line),
+    );
+    return;
+  }
+
+  await applyOffboarding(plan);
+  describeOffboarding(plan, OFFBOARD_DONE).forEach((line) => console.log(line));
+}
+
 async function runLatest(invocation: InvocationOf<"latest">): Promise<void> {
   const project = await openInvocationProject(invocation);
   const [latest] = knownReleases(await readChangelog(project));
@@ -398,6 +490,8 @@ function runInvocation(invocation: Invocation): Promise<void> {
       return runRelease(invocation);
     case "render":
       return runRender(invocation);
+    case "offboard":
+      return runOffboard(invocation);
     case "import":
       return runImport(invocation);
     case "latest":

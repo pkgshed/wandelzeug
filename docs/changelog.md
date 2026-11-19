@@ -1,6 +1,6 @@
 # The changelog
 
-This guide covers how wandelzeug finds its way around `CHANGELOG.md`, how it renders past releases again, the links of releases, the templates that render a release, and how `wlz init` and `wlz import` adopt an existing changelog.
+This guide covers how wandelzeug finds its way around `CHANGELOG.md`, how it renders past releases again, the links of releases, the templates that render a release, how `wlz init` and `wlz import` adopt an existing changelog, and how `wlz offboard` leaves it behind.
 
 ## Markers
 
@@ -158,3 +158,21 @@ A fitting release keeps its notes exactly as they are, and the hash in its data 
 The import stops at the first release that doesn't fit, and names the release, its line, and the reason, such as a section heading that matches no configured kind, or a paragraph next to the lists. A release from before wandelzeug that stops the import becomes the baseline, and it and the releases below it stay as they are. To import them too, fix what the message names, for example by adding the kind to the configuration or by moving a summary into a list item, then run `wlz import` again. When every release has a data block, the import removes the baseline, because the changelog no longer needs it.
 
 After the import, set `repositoryUrl` if it's empty, then run `wlz render` to give the imported releases the layout of your templates.
+
+## Stop using wandelzeug
+
+To remove wandelzeug from a project, run the following command in the project root:
+
+```sh
+wlz offboard
+```
+
+The command deletes the `.changes` directory with the configuration, the unreleased directory, and the `.gitignore` that keeps drafts out of version control. It commits nothing, so review the result with `git status` and commit it yourself.
+
+- Unreleased changes and a kept draft stop the command, so nothing recorded gets lost. Release the changes with `wlz batch` or `wlz release`, and record the draft with `wlz new --resume`, or pass `--force` to delete them.
+- The changelog keeps its notes and link definitions. Its markers and data blocks are HTML comments, which Markdown viewers hide, so they can stay. With them in place, `wlz init` adopts the changelog again later, and `wlz render` still works.
+- To remove the markers and data blocks too, pass `--strip-markers`. Where a marker leaves two blank lines in a row, one of them goes, so the notes keep their spacing. Markers that don't pair up go as well.
+- To see what the command would do, pass `--dry-run`.
+
+Commands outside the project that call `wlz`, such as `wlz check` in CI or a release workflow, need removing by hand. To uninstall the `wlz` command itself, see [Install](../README.md#install).
+

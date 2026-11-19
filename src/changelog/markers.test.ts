@@ -13,6 +13,7 @@ import {
   releaseNotes,
   releaseSection,
   replaceLines,
+  stripMarkers,
 } from "./markers.ts";
 
 describe("changelog markers", () => {
@@ -387,4 +388,112 @@ describe("changelog markers", () => {
       );
     },
   );
+});
+
+describe("stripping markers", () => {
+  const notes = "## 1.1.0\n\n### Fixed\n\n* Crash";
+  const data: ReleaseData = {
+    date: isoDate("2026-11-18"),
+    hash: notesHash(notes),
+    changes: [
+      { kind: "Fixed", breaking: false, metadata: {}, body: "* Crash" },
+    ],
+  };
+  const marked = [
+    "# Changelog",
+    "",
+    "Intro.",
+    "",
+    anchorMarker("1.0.0"),
+    "",
+    releaseSection("1.1.0", data, notes),
+    "",
+    releaseSection("1.0.1", undefined, "## 1.0.1\n\n* Typo"),
+    "",
+    "## 1.0.0",
+    "",
+    "* First",
+    "",
+    LINKS_BEGIN,
+    "[1.1.0]: https://example.com/1.1.0",
+    LINKS_END,
+    "[1.0.0]: https://example.com/1.0.0",
+    "",
+  ].join("\n");
+
+  test("it keeps the notes and the link definitions with their spacing", () => {
+    expect(stripMarkers(marked)).toEqual({
+      text: [
+        "# Changelog",
+        "",
+        "Intro.",
+        "",
+        "## 1.1.0",
+        "",
+        "### Fixed",
+        "",
+        "* Crash",
+        "",
+        "## 1.0.1",
+        "",
+        "* Typo",
+        "",
+        "## 1.0.0",
+        "",
+        "* First",
+        "",
+        "[1.1.0]: https://example.com/1.1.0",
+        "[1.0.0]: https://example.com/1.0.0",
+        "",
+      ].join("\n"),
+      markers: 7,
+      dataBlocks: 1,
+    });
+  });
+
+  test("it keeps Windows line breaks", () => {
+    const stripped = stripMarkers(marked.replaceAll("\n", "\r\n"));
+    expect(stripped.text).toBe(
+      stripMarkers(marked).text.replaceAll("\n", "\r\n"),
+    );
+  });
+
+  test("it leaves a changelog without markers as it is", () => {
+    const plain = "# Changelog\n\n## 1.0.0\n\n* First\n";
+    expect(stripMarkers(plain)).toEqual({
+      text: plain,
+      markers: 0,
+      dataBlocks: 0,
+    });
+  });
+
+  test("it strips markers that do not pair up, and old ones", () => {
+    const broken = [
+      "<!-- wlz:releases -->",
+      "",
+      "<!-- BEGIN wlz:release 1.0.0 -->",
+      "## 1.0.0",
+      "",
+      "<!-- wlz:links -->",
+      "",
+    ].join("\n");
+    expect(parseChangelog(broken).ok).toBe(false);
+    expect(stripMarkers(broken)).toEqual({
+      text: "## 1.0.0\n",
+      markers: 3,
+      dataBlocks: 0,
+    });
+  });
+
+  test("it refuses a data block without its closing line", () => {
+    const open = [
+      "## 1.0.0",
+      "",
+      "<!-- wlz:data date=2026-11-18",
+      "Fixed: []",
+    ].join("\n");
+    expect(() => stripMarkers(open)).toThrow(
+      "line 3: the data block lacks its closing --> line",
+    );
+  });
 });
