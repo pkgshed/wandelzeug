@@ -285,6 +285,29 @@ const showCommand = command(
   { brief: message`Print the notes of a release from the changelog` },
 );
 
+const offboardCommand = command(
+  "offboard",
+  object({
+    command: constant("offboard"),
+    stripMarkers: switchFlag(
+      ["--strip-markers"],
+      message`Also remove the wlz markers and data blocks from the changelog`,
+    ),
+    force: switchFlag(
+      ["--force"],
+      message`Also delete unreleased changes and a kept draft`,
+    ),
+    dryRun: dryRunFlag(
+      message`List what offboard would do, and change nothing`,
+    ),
+    ...COMMON_OPTIONS,
+  }),
+  {
+    brief: message`Remove wandelzeug from the project`,
+    description: message`Deletes the .changes directory with the configuration and the unreleased directory, and commits nothing. The changelog keeps its notes and link definitions. Its markers and data blocks stay too, unless you pass ${optionName("--strip-markers")}. Unreleased changes or a kept draft stop the command, unless you pass ${optionName("--force")}, so release them first to keep them.`,
+  },
+);
+
 const WLZ = or(
   initCommand,
   newCommand,
@@ -296,6 +319,7 @@ const WLZ = or(
   latestCommand,
   nextCommand,
   showCommand,
+  offboardCommand,
   { errors: { noMatch: message`missing command` } },
 );
 

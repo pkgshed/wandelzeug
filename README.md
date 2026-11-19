@@ -23,7 +23,7 @@ wandelzeug records each change as its own small Markdown file and turns the coll
 - **Release in one step:** `wlz release auto` picks the next version from the kinds of the changes and whether they break compatibility, writes the changelog, commits it, and tags the commit with git, or with a tool of your choice such as [semverkzeug](https://github.com/0x5a17ed/semverkzeug).
 - **Version numbers in step:** the version in files such as `package.json` follows each release.
 - **Your layout:** Mustache templates shape the file names, the headings, the entries, and the whole release, and `wlz render` applies a changed template to past releases too.
-- **Your history:** `wlz init` adopts an existing changelog and leaves everything that is already there in place. With `--import`, its releases get data blocks, so they render with your templates too.
+- **Your history:** `wlz init` adopts an existing changelog and leaves everything that is already there in place. With `--import`, its releases get data blocks, so they render with your templates too. `wlz offboard` removes wandelzeug again and can leave a plain changelog behind.
 - **Monorepos:** each project keeps its own `.changes` directory.
 - **Shell completion:** Tab completes commands, options, and bumps in bash, zsh, fish, PowerShell, and Nushell.
 
@@ -77,7 +77,7 @@ To keep wandelzeug inside another repository instead, download the single execut
 - `wlz --help` lists the commands, and `wlz COMMAND --help` explains one of them. Set `NO_COLOR` to turn off the colours of the help.
 - The `.changes/config.yaml` that `wlz init` writes explains every setting.
 - [Change files](docs/changes.md) covers the file format, recording changes, extra fields, and checks in CI.
-- [The changelog](docs/changelog.md) covers the markers, links, templates, and adopting an existing changelog.
+- [The changelog](docs/changelog.md) covers the markers, links, templates, adopting an existing changelog, and removing wandelzeug again.
 - [Releases](docs/releases.md) covers versions, releasing and tagging, version numbers in other files, and monorepos.
 - [Shell completion](docs/completion.md) covers installing the completion script for each shell.
 
