@@ -197,7 +197,14 @@ describe("changelog markers", () => {
     const data: ReleaseData = {
       date: isoDate("2026-11-17"),
       hash: notesHash(notes),
-      changes: [{ kind: "Added", metadata: { pr: 7 }, body: "* Feature" }],
+      changes: [
+        {
+          kind: "Added",
+          breaking: false,
+          metadata: { pr: 7 },
+          body: "* Feature",
+        },
+      ],
     };
     const withData = [anchor, "", releaseSection("1.0.0", data, notes), ""];
 
@@ -227,7 +234,14 @@ describe("changelog markers", () => {
     test("a data block keeps the comment closed when a value holds -->", () => {
       const tricky: ReleaseData = {
         ...data,
-        changes: [{ kind: "Added", metadata: {}, body: "* A --> B --!> C" }],
+        changes: [
+          {
+            kind: "Added",
+            breaking: false,
+            metadata: {},
+            body: "* A --> B --!> C",
+          },
+        ],
       };
       const section = releaseSection("1.0.0", tricky, notes);
       expect(

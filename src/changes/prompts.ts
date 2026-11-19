@@ -82,6 +82,8 @@ export const askChoices = async <Value>(
     }),
   );
 
-/** Asks a yes or no question. */
-export const askYesNo = async (message: string): Promise<boolean> =>
-  answered(await clack.confirm({ message }));
+/** Asks a yes or no question, with the given answer preselected. */
+export const askYesNo = async (
+  message: string,
+  initialValue = true,
+): Promise<boolean> => answered(await clack.confirm({ message, initialValue }));

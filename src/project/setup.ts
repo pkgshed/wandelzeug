@@ -90,8 +90,10 @@ versionFormat: ${yamlString(DEFAULT_CONFIG.versionFormat)}
 kindFormat: ${yamlString(DEFAULT_CONFIG.kindFormat)}
 # One change entry. A change whose body is a list has an entry per item.
 # Values: body, the item or the whole body; marker, the list marker such
-# as "* "; text, the item after its marker; kind; and any front matter key,
-# as in "{{body}}{{#pr}} (#{{pr}}){{/pr}}" or "{{marker}}[{{issue}}] {{text}}".
+# as "* "; text, the item after its marker; kind; breaking, set for a
+# change that breaks compatibility; kindBreaks, set when its kind always
+# breaks; and any front matter key, as in
+# "{{body}}{{#pr}} (#{{pr}}){{/pr}}" or "{{marker}}[{{issue}}] {{text}}".
 changeFormat: ${yamlString(DEFAULT_CONFIG.changeFormat)}
 
 # The whole release. It places the three formats above as the partials
@@ -173,31 +175,41 @@ releaseData: ${DEFAULT_CONFIG.releaseData}
 replacements: []
 
 # How "auto" bumps while the latest release is 0.y.z, which Semantic
-# Versioning reserves for initial development. From 1.0.0 on, every change
-# bumps as its kind says. An explicit bump, as in "wlz release major",
-# always applies as given.
+# Versioning reserves for initial development. From 1.0.0 on, a breaking
+# change bumps the major version, and any other change bumps as its kind
+# says. An explicit bump, as in "wlz release major", always applies as
+# given.
 #
-#   minor-capped  a major change bumps the minor version, and the other
+#   minor-capped  a breaking change bumps the minor version, and the other
 #                 changes bump as their kind says
 #   shifted       every change bumps one level lower: major to minor,
 #                 minor to patch, and patch stays patch
-#   literal       every change bumps as its kind says, so a major change
+#   literal       every change bumps as it says, so a breaking change
 #                 releases 1.0.0
 bumpStrategy: ${DEFAULT_CONFIG.bumpStrategy}
 
 # Kinds in changelog order. A bump lets "auto" pick the next version, see
-# bumpStrategy.
+# bumpStrategy. breaking says whether the changes of a kind break
+# compatibility, which bumps the major version:
+#
+#   no   never, the default
+#   yes  always, so the kind needs no bump
+#   ask  when the change says "breaking: true", which "new" asks for
+#
+# A kind with "bump: major" always breaks.
 kinds:
   - label: Added
     bump: minor
   - label: Changed
-    bump: major
+    bump: minor
+    breaking: ask
   - label: Deprecated
     bump: minor
   - label: Removed
-    bump: major
+    breaking: yes
   - label: Fixed
     bump: patch
+    breaking: ask
   - label: Security
     bump: patch
 

@@ -137,10 +137,11 @@ describe("extra fields", () => {
       ],
     });
     expect(options).toEqual({
-      kind: { label: "Fixed", bump: "patch" },
+      kind: { label: "Fixed", bump: "patch", breaking: "ask" },
       body: undefined,
       metadata: { pr: 7, team: "core" },
       givenKeys: new Set(["pr", "ticket", "team"]),
+      breaking: undefined,
     });
   });
 });

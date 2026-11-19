@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Change } from "../changes/fragments.ts";
 import type { Bump, BumpStrategy } from "../shared/versions.ts";
 import {
+  breakingChange,
   change,
   isoDate,
   projectWith,
@@ -14,20 +15,56 @@ import {
   previousRelease,
   releaseValues,
   renderLink,
+  renderRelease,
 } from "./releases.ts";
 
+describe("breaking labels", () => {
+  const values = releaseValues(
+    projectWith({}).config,
+    version("2.0.0"),
+    isoDate("2026-11-17"),
+    [],
+  );
+  const changes = [
+    breakingChange("Removed", "* Old option"),
+    breakingChange("Fixed", "* Strict parsing"),
+    change("Fixed", "* Crash"),
+  ];
+
+  test("the default labels breaking changes unless their kind always breaks", () => {
+    const notes = renderRelease(projectWith({}), values, changes);
+    expect(notes).toContain("### Removed\n\n* Old option\n");
+    expect(notes).toContain(
+      "### Fixed\n\n* **Breaking:** Strict parsing\n* Crash",
+    );
+  });
+
+  test("a change format without kindBreaks labels every breaking change", () => {
+    const project = projectWith({
+      changeFormat:
+        "{{marker}}{{#breaking}}**Breaking:** {{/breaking}}{{text}}",
+    });
+    const notes = renderRelease(project, values, changes);
+    expect(notes).toContain("### Removed\n\n* **Breaking:** Old option\n");
+    expect(notes).toContain("* **Breaking:** Strict parsing\n* Crash");
+  });
+});
+
 describe("auto bumps", () => {
-  const changed = [change("Fixed", "* Crash"), change("Changed", "* Format")];
+  const breaking = [
+    change("Fixed", "* Crash"),
+    breakingChange("Changed", "* Format"),
+  ];
   const added = [change("Fixed", "* Crash"), change("Added", "* Option")];
 
   const cases: [BumpStrategy, Release[], Change[], Bump][] = [
-    ["minor-capped", [release("0.3.0")], changed, "minor"],
-    ["minor-capped", [], changed, "minor"],
+    ["minor-capped", [release("0.3.0")], breaking, "minor"],
+    ["minor-capped", [], breaking, "minor"],
     ["minor-capped", [release("0.3.0")], added, "minor"],
-    ["shifted", [release("0.3.0")], changed, "minor"],
+    ["shifted", [release("0.3.0")], breaking, "minor"],
     ["shifted", [release("0.3.0")], added, "patch"],
-    ["literal", [release("0.3.0")], changed, "major"],
-    ["minor-capped", [release("1.2.0"), release("0.9.0")], changed, "major"],
+    ["literal", [release("0.3.0")], breaking, "major"],
+    ["minor-capped", [release("1.2.0"), release("0.9.0")], breaking, "major"],
     ["shifted", [release("1.2.0")], added, "minor"],
   ];
 

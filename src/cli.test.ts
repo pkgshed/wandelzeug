@@ -180,6 +180,7 @@ describe("command line", () => {
       "new",
       "-k",
       "fixed",
+      "--no-breaking",
       "-b",
       "* Crash on start",
       "-m",
@@ -193,6 +194,110 @@ describe("command line", () => {
     });
     const text = await readFile(join(root, createdPath(result.stdout)), "utf8");
     expect(text).toBe("---\nkind: Fixed\npr: 7\n---\n* Crash on start\n");
+  });
+
+  test("new records whether a change breaks, as its kind allows", async () => {
+    await run("init");
+    const breaking = await run("new", "-k", "Fixed", "--breaking", "-b", "* A");
+    const notBreaking = await run(
+      "new",
+      "-k",
+      "Fixed",
+      "--no-breaking",
+      "-b",
+      "* B",
+    );
+    const removed = await run("new", "-k", "Removed", "-b", "* C");
+
+    const read = (result: { stdout: string }) =>
+      readFile(join(root, createdPath(result.stdout)), "utf8");
+    expect(await read(breaking)).toBe(
+      "---\nkind: Fixed\nbreaking: true\n---\n* A\n",
+    );
+    expect(await read(notBreaking)).toBe("---\nkind: Fixed\n---\n* B\n");
+    expect(await read(removed)).toBe(
+      "---\nkind: Removed\nbreaking: true\n---\n* C\n",
+    );
+  });
+
+  test("new without a terminal needs an answer for a kind that asks whether it breaks", async () => {
+    await run("init");
+    const result = await run("new", "-k", "Fixed", "-b", "* Crash");
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain(
+      'missing --breaking or --no-breaking for kind "Fixed", and stdin is not a terminal to ask for it',
+    );
+    expect(await unreleasedFiles()).toEqual([".gitkeep"]);
+  });
+
+  test.each([
+    [
+      ["-k", "Added", "--breaking"],
+      '--breaking contradicts kind "Added", which never breaks',
+    ],
+    [
+      ["-k", "Removed", "--no-breaking"],
+      '--no-breaking contradicts kind "Removed", which always breaks',
+    ],
+  ])("new %p fails", async (args, message) => {
+    await run("init");
+    const result = await run("new", ...args, "-b", "* A");
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain(message);
+    expect(await unreleasedFiles()).toEqual([".gitkeep"]);
+  });
+
+  test("check reports a change whose breaking flag contradicts its kind", async () => {
+    await run("init");
+    await writeFile(
+      join(root, ".changes/unreleased/001-added.md"),
+      "---\nkind: Added\nbreaking: true\n---\n* Option\n",
+    );
+    const result = await run("check");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      'breaking: true contradicts kind "Added", which never breaks',
+    );
+  });
+
+  test("batch labels a breaking change and records it in the data block", async () => {
+    await writeFile(join(root, "CHANGELOG.md"), "# History\n\n## [1.2.0]\n");
+    await run("init");
+    await run("new", "-k", "Fixed", "--breaking", "-b", "* Strict parsing");
+    await run("new", "-k", "Fixed", "--no-breaking", "-b", "* Crash");
+    await run("new", "-k", "Removed", "-b", "* Old option");
+    const result = await run("batch", "auto", "--date", "2026-11-17");
+
+    expect(result.exitCode).toBe(0);
+    const changelog = await readFile(join(root, "CHANGELOG.md"), "utf8");
+    expect(changelog).toContain(
+      [
+        "## [`2.0.0`] (2026-11-17)",
+        "",
+        "### Removed",
+        "",
+        "* Old option",
+        "",
+        "### Fixed",
+        "",
+        "* **Breaking:** Strict parsing",
+        "* Crash",
+        "",
+      ].join("\n"),
+    );
+    expect(changelog).toContain(
+      [
+        "Removed:",
+        "  - breaking: true",
+        '    body: "* Old option"',
+        "Fixed:",
+        "  - breaking: true",
+        '    body: "* Strict parsing"',
+        '  - body: "* Crash"',
+      ].join("\n"),
+    );
+    expect((await run("render")).exitCode).toBe(0);
+    expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toBe(changelog);
   });
 
   test("new without a terminal needs --kind", async () => {
@@ -277,10 +382,10 @@ describe("command line", () => {
     expect((await run("next", "major")).stdout).toBe("2.0.0\n");
   });
 
-  test("next auto keeps a major change below 1.0.0 unless the strategy is literal", async () => {
+  test("next auto keeps a breaking change below 1.0.0 unless the strategy is literal", async () => {
     await writeFile(join(root, "CHANGELOG.md"), "# History\n\n## [0.3.0]\n");
     await run("init");
-    await run("new", "-k", "Changed", "-b", "* Format");
+    await run("new", "-k", "Changed", "--breaking", "-b", "* Format");
 
     expect((await run("next", "auto")).stdout).toBe("0.4.0\n");
     expect((await run("next", "major")).stdout).toBe("1.0.0\n");
@@ -308,7 +413,7 @@ describe("command line", () => {
 
   test("show prints the notes of a release", async () => {
     await run("init", "--baseline", "1.0.0");
-    await run("new", "-k", "Fixed", "-b", "* Crash");
+    await run("new", "-k", "Fixed", "--no-breaking", "-b", "* Crash");
     await run("batch", "patch", "--date", "2026-11-17");
     expect((await run("latest")).stdout).toBe("1.0.1\n");
 
@@ -360,7 +465,14 @@ describe("command line", () => {
   test("new without a terminal needs every required field", async () => {
     await run("init");
     await writeConfig(root, PR_FIELD_CONFIG);
-    const missing = await run("new", "-k", "fixed", "-b", "* Crash");
+    const missing = await run(
+      "new",
+      "-k",
+      "fixed",
+      "--no-breaking",
+      "-b",
+      "* Crash",
+    );
     expect(missing.exitCode).toBe(2);
     expect(missing.stderr).toContain('missing required field "pr"');
 
@@ -368,6 +480,7 @@ describe("command line", () => {
       "new",
       "-k",
       "fixed",
+      "--no-breaking",
       "-b",
       "* Crash",
       "-m",
@@ -391,7 +504,13 @@ describe("command line", () => {
       stdout: "created .changes/unreleased/001-<id>-fixed-crash-on-start.md\n",
     });
     expect(await readFile(join(root, "seen-draft.md"), "utf8")).toContain(
-      "kind: Fixed\npr: # Pull request number (int, required)\n---\n* \n",
+      [
+        "kind: Fixed",
+        "breaking: # true if the change breaks compatibility",
+        "pr: # Pull request number (int, required)",
+        "---",
+        "* ",
+      ].join("\n"),
     );
     expect(await Bun.file(join(root, ".changes/.draft.md")).exists()).toBe(
       false,
@@ -527,7 +646,7 @@ describe("command line", () => {
       ".changes/unreleased: no change file added or modified since main",
     );
 
-    await run("new", "-k", "Fixed", "-b", "* Crash");
+    await run("new", "-k", "Fixed", "--no-breaking", "-b", "* Crash");
     await commitAll(root, "record a change");
     expect(await run("check", "--since", "main")).toMatchObject({
       exitCode: 0,
@@ -570,7 +689,7 @@ describe("command line", () => {
       await run("init", "--repository", "https://codeberg.org/o/r");
       await run("new", "-k", "Added", "-b", "* Feature", "-m", "pr=42");
       await run("batch", "minor", "--date", "2026-11-17");
-      await run("new", "-k", "Fixed", "-b", "* Crash");
+      await run("new", "-k", "Fixed", "--no-breaking", "-b", "* Crash");
       await run("batch", "patch", "--date", "2026-11-18");
     }
 
@@ -764,7 +883,7 @@ describe("command line", () => {
       await run("init", "--repository", "https://github.com/o/r");
       await editConfig("extraFields: []", linkFields);
       await editConfig(
-        'changeFormat: "{{body}}"',
+        'changeFormat: "{{marker}}{{#breaking}}{{^kindBreaks}}**Breaking:** {{/kindBreaks}}{{/breaking}}{{text}}"',
         'changeFormat: "{{marker}}{{#issue}}[{{issue}}] {{/issue}}{{text}}{{#pr}} ([#{{pr}}]){{/pr}}"',
       );
     }
@@ -774,9 +893,25 @@ describe("command line", () => {
     test("batch adds the definitions that the changelog lacks, and render keeps them", async () => {
       await projectWithLinks();
       await run("new", "-k", "Added", "-b", "* Thing", "-m", "issue=FOO-1234");
-      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1]", "-m", "pr=42");
+      await run(
+        "new",
+        "-k",
+        "Fixed",
+        "--no-breaking",
+        "-b",
+        "* Fixes [FOO-1]",
+        "-m",
+        "pr=42",
+      );
       await run("batch", "minor", "--date", "2026-11-17");
-      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1] and [FOO-9]");
+      await run(
+        "new",
+        "-k",
+        "Fixed",
+        "--no-breaking",
+        "-b",
+        "* Fixes [FOO-1] and [FOO-9]",
+      );
       await run("batch", "patch", "--date", "2026-11-18");
 
       const text = await changelog();
@@ -801,7 +936,16 @@ describe("command line", () => {
 
     test("show appends the definitions that its notes use, the release link first", async () => {
       await projectWithLinks();
-      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1]", "-m", "pr=42");
+      await run(
+        "new",
+        "-k",
+        "Fixed",
+        "--no-breaking",
+        "-b",
+        "* Fixes [FOO-1]",
+        "-m",
+        "pr=42",
+      );
       await run("batch", "minor", "--date", "2026-11-17");
 
       expect((await run("show", "0.1.0")).stdout).toBe(
@@ -1028,7 +1172,7 @@ describe("command line", () => {
 
     test("the tag helper gets the bump after the bump strategy", async () => {
       await projectWithFakeHelper();
-      await run("new", "-k", "Changed", "-b", "* Format");
+      await run("new", "-k", "Changed", "--breaking", "-b", "* Format");
       await commitAll(root, "record a breaking change");
 
       const result = await run("release", "auto", "--date", "2026-11-17");
@@ -1044,7 +1188,7 @@ describe("command line", () => {
         "extraFields: []",
         "extraFields:\n  - key: issue\n    pattern: 'FOO-\\d+'\n    url: \"https://jira.corp.com/browse/{{issue}}\"",
       );
-      await run("new", "-k", "Fixed", "-b", "* Fixes [FOO-1]");
+      await run("new", "-k", "Fixed", "--no-breaking", "-b", "* Fixes [FOO-1]");
       await commitAll(root, "link issues");
 
       expect((await run("release", "auto")).exitCode).toBe(0);

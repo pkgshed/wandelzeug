@@ -51,8 +51,18 @@ export const change = (
   metadata: Metadata = {},
 ): Change => ({
   kind,
+  breaking: false,
   metadata,
   body,
+});
+
+export const breakingChange = (
+  kind: string,
+  body: string,
+  metadata: Metadata = {},
+): Change => ({
+  ...change(kind, body, metadata),
+  breaking: true,
 });
 
 export const release = (name: string): Release => ({

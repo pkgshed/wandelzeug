@@ -20,7 +20,7 @@ git config commit.gpgSign false
 git config tag.gpgSign false
 
 if ! compgen -G ".changes/unreleased/*.md" >/dev/null; then
-  bun src/cli.ts new --kind Fixed --body "* Rehearse the release."
+  bun src/cli.ts new --kind Fixed --no-breaking --body "* Rehearse the release."
   git add .changes
   git commit --quiet --message "record a change for the rehearsal"
 fi

@@ -77,10 +77,11 @@ describe("import", () => {
     expect(newest?.data?.changes).toEqual([
       {
         kind: "Added",
+        breaking: false,
         metadata: {},
         body: "- Support for TOML config\n  with a second line",
       },
-      { kind: "Fixed", metadata: {}, body: "- Crash" },
+      { kind: "Fixed", breaking: false, metadata: {}, body: "- Crash" },
     ]);
     for (const section of [newest, oldest]) {
       if (section?.data === undefined) throw new Error("missing data block");
@@ -197,7 +198,7 @@ describe("import", () => {
     const document = changelogDocument(plan.content);
     const [section] = document.releases;
     expect(section?.data?.changes).toEqual([
-      { kind: "Added", metadata: {}, body: "* Feature" },
+      { kind: "Added", breaking: false, metadata: {}, body: "* Feature" },
     ]);
     expect(currentNotes(document, section!)).toBe(notes.join("\n"));
   });

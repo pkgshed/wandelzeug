@@ -46,6 +46,24 @@ function describeField(field: ExtraField): string {
 const fieldPlaceholder = (field: ExtraField): string =>
   `${field.key}: # ${field.prompt} (${describeField(field)})`;
 
+/**
+ * The "breaking" line of a draft: the answer of --breaking or
+ * --no-breaking, or else an empty entry with a hint when the kind of the
+ * change, or any kind while the kind is open, asks for one.
+ */
+function breakingLines(config: Config, options: ChangeOptions): string[] {
+  if (options.breaking !== undefined) {
+    return [yamlEntry("breaking", options.breaking)];
+  }
+  const hint = "breaking: # true if the change breaks compatibility";
+  if (options.kind !== undefined) {
+    return options.kind.breaking === "ask" ? [hint] : [];
+  }
+  const asking = config.kinds.filter((kind) => kind.breaking === "ask");
+  if (asking.length === 0) return [];
+  return [`${hint} (${asking.map((kind) => kind.label).join(", ")})`];
+}
+
 /** Renders the draft that "new --edit" opens, filled in from the options. */
 export function renderDraft(config: Config, options: ChangeOptions): string {
   const kinds = config.kinds.map((kind) => kind.label).join(", ");
@@ -61,6 +79,7 @@ export function renderDraft(config: Config, options: ChangeOptions): string {
     `# Kinds: ${kinds}`,
     "# Leave the body empty to cancel the change.",
     kindLine,
+    ...breakingLines(config, options),
     ...Object.entries(options.metadata).map(([key, value]) =>
       yamlEntry(key, value),
     ),

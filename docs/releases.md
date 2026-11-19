@@ -4,7 +4,7 @@ This guide covers how wandelzeug picks versions, how `wlz release` commits and t
 
 ## Versions
 
-`batch` takes either a semantic version, such as `1.4.0`, or a bump: `major`, `minor`, `patch`, or `auto`. The `auto` bump picks the most significant bump among the kinds of the unreleased changes. Bumps start from the latest stable release in the changelog, or from the baseline, and skip prereleases. New releases carry the configured `versionPrefix`, which defaults to none, so a release is named like `1.4.0`.
+`batch` takes either a semantic version, such as `1.4.0`, or a bump: `major`, `minor`, `patch`, or `auto`. The `auto` bump picks the most significant bump among the unreleased changes: a breaking change bumps the major version, and any other change bumps as its kind says, see [Breaking changes](changes.md#breaking-changes). Bumps start from the latest stable release in the changelog, or from the baseline, and skip prereleases. New releases carry the configured `versionPrefix`, which defaults to none, so a release is named like `1.4.0`.
 
 To see a version without writing anything, use one of the following commands:
 
@@ -14,17 +14,17 @@ To see a version without writing anything, use one of the following commands:
 
 ### Initial development
 
-Semantic Versioning reserves versions below 1.0.0 for initial development, where anything may change. While the latest stable release is 0.y.z, or nothing is released yet, the `bumpStrategy` setting decides how `auto` treats the bumps of the kinds:
+Semantic Versioning reserves versions below 1.0.0 for initial development, where anything may change. While the latest stable release is 0.y.z, or nothing is released yet, the `bumpStrategy` setting decides how `auto` treats the bumps of the changes:
 
-| Strategy | Major change | Minor change | Patch change |
+| Strategy | Breaking change | Minor change | Patch change |
 |---|---|---|---|
 | `minor-capped`, the default | minor | minor | patch |
 | `shifted` | minor | patch | patch |
 | `literal` | major | minor | patch |
 
-With `minor-capped`, a release with a `Changed` entry goes from 0.3.0 to 0.4.0 instead of 1.0.0. `shifted` follows how Cargo and the caret ranges of npm read 0.y.z versions, where the minor version marks incompatible changes. `literal` applies the bumps of the kinds as they are, so a major change releases 1.0.0.
+With `minor-capped`, a release with a breaking change goes from 0.3.0 to 0.4.0 instead of 1.0.0. `shifted` follows how Cargo and the caret ranges of npm read 0.y.z versions, where the minor version marks incompatible changes. `literal` applies the bumps as they are, so a breaking change releases 1.0.0.
 
-From 1.0.0 on, every strategy bumps as the kinds say. An explicit bump always applies as given, so to release 1.0.0, run `wlz release major` or `wlz batch 1.0.0`. The `{{bump}}` value of the tag helper holds the bump after the strategy, see [Choose how releases get tagged](#choose-how-releases-get-tagged).
+From 1.0.0 on, every strategy bumps as the changes say. An explicit bump always applies as given, so to release 1.0.0, run `wlz release major` or `wlz batch 1.0.0`. The `{{bump}}` value of the tag helper holds the bump after the strategy, see [Choose how releases get tagged](#choose-how-releases-get-tagged).
 
 ## Release and tag
 

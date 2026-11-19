@@ -15,6 +15,7 @@ import {
 } from "./fragments.ts";
 import {
   type ChangeOptions,
+  checkBreakingOption,
   isInteractive,
   requireTerminal,
 } from "./options.ts";
@@ -23,6 +24,7 @@ import {
   askChoices,
   askLines,
   askText,
+  askYesNo,
   type Choice,
   type Validate,
 } from "./prompts.ts";
@@ -43,6 +45,20 @@ async function askBody(): Promise<string> {
   );
   const line = answer.trim();
   return LIST_MARKER.test(line) ? line : `* ${line}`;
+}
+
+/**
+ * Decides whether a change breaks. A kind that always or never breaks
+ * answers without a question. A kind that asks gets a question, which
+ * defaults to no. Without a terminal, such a kind needs --breaking or
+ * --no-breaking, so a script cannot skip the decision by accident.
+ */
+async function askBreaking(kind: Kind): Promise<boolean> {
+  if (kind.breaking !== "ask") return kind.breaking === "yes";
+  requireTerminal(
+    `--breaking or --no-breaking for kind ${JSON.stringify(kind.label)}`,
+  );
+  return askYesNo("Breaking change?", false);
 }
 
 /** Accepts an answer that the field accepts, and shows its problem otherwise. */
@@ -114,18 +130,17 @@ async function askMissingFields(
 /** Checks the extra fields of a change that the options and answers made up. */
 function completeChange(
   config: Config,
-  kind: Kind,
-  body: string,
-  metadata: Metadata,
+  change: Omit<Change, "kind"> & { readonly kind: Kind },
 ): Change {
-  const fields = applyExtraFields(config.extraFields, metadata);
+  const fields = applyExtraFields(config.extraFields, change.metadata);
   if (fields.problems.length > 0) {
     throw new UsageError(fields.problems.join(", "));
   }
   return {
-    kind: kind.label,
+    kind: change.kind.label,
+    breaking: change.breaking,
     metadata: fields.metadata,
-    body,
+    body: change.body,
   };
 }
 
@@ -135,14 +150,18 @@ export async function askChange(
   options: ChangeOptions,
 ): Promise<Change> {
   const kind = options.kind ?? (await askKind(config.kinds));
+  checkBreakingOption(kind, options.breaking);
   const body = (options.body ?? (await askBody())).trim();
   if (isBlankBody(body)) {
     throw new UsageError("empty change body");
   }
 
+  const breaking = options.breaking ?? (await askBreaking(kind));
   const asked = await askMissingFields(config.extraFields, options.givenKeys);
-  return completeChange(config, kind, body, {
-    ...options.metadata,
-    ...asked,
+  return completeChange(config, {
+    kind,
+    breaking,
+    metadata: { ...options.metadata, ...asked },
+    body,
   });
 }

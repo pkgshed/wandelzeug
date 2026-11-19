@@ -14,6 +14,7 @@ export type NewChangeInput = {
   readonly kind?: string | undefined;
   readonly body?: string | undefined;
   readonly meta?: readonly MetaEntry[] | undefined;
+  readonly breaking?: boolean | undefined;
 };
 
 /** What "wlz new" knows from its options before it asks anything. */
@@ -24,7 +25,27 @@ export type ChangeOptions = {
   readonly metadata: Metadata;
   /** Every --meta key, including the ones given an empty value. */
   readonly givenKeys: ReadonlySet<string>;
+  /** true for --breaking, false for --no-breaking, and undefined without either. */
+  readonly breaking: boolean | undefined;
 };
+
+/** Checks that --breaking or --no-breaking agrees with the breaking policy of the kind. */
+export function checkBreakingOption(
+  kind: Kind,
+  breaking: boolean | undefined,
+): void {
+  const label = JSON.stringify(kind.label);
+  if (breaking === true && kind.breaking === "no") {
+    throw new UsageError(
+      `--breaking contradicts kind ${label}, which never breaks`,
+    );
+  }
+  if (breaking === false && kind.breaking === "yes") {
+    throw new UsageError(
+      `--no-breaking contradicts kind ${label}, which always breaks`,
+    );
+  }
+}
 
 /** Decimal integers up to 15 digits fit a double exactly. */
 const DECIMAL_INTEGER = /^(?:0|[1-9]\d{0,14})$/;
@@ -59,12 +80,16 @@ export async function readChangeOptions(
   input: NewChangeInput,
 ): Promise<ChangeOptions> {
   const metaOptions = (input.meta ?? []).map(trimMetaEntry);
+  const kind =
+    input.kind === undefined ? undefined : resolveKind(kinds, input.kind);
+  if (kind !== undefined) checkBreakingOption(kind, input.breaking);
   return {
-    kind: input.kind === undefined ? undefined : resolveKind(kinds, input.kind),
+    kind,
     body:
       input.body === undefined ? undefined : await readBodyOption(input.body),
     metadata: metadataFromOptions(metaOptions),
     givenKeys: new Set(metaOptions.map(([key]) => key)),
+    breaking: input.breaking,
   };
 }
 

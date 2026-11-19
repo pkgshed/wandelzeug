@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { autoBump } from "../changelog/releases.ts";
 import { DEFAULT_CONFIG } from "../project/config.ts";
-import { change, projectWith } from "../test-helpers.ts";
+import { breakingChange, change, projectWith } from "../test-helpers.ts";
 import {
   encodeFragmentId,
   type FragmentId,
@@ -167,8 +167,61 @@ describe("fragments", () => {
       autoBump([change("Fixed", "* A"), change("Added", "* B")], kinds),
     ).toBe("minor");
     expect(autoBump([change("Fixed", "* A")], kinds)).toBe("patch");
-    expect(() =>
-      autoBump([change("Noted", "* A")], [{ label: "Noted", bump: undefined }]),
-    ).toThrow(/no unreleased change has a kind with a bump/);
+    const noted = { label: "Noted", bump: undefined, breaking: "ask" } as const;
+    expect(() => autoBump([change("Noted", "* A")], [noted])).toThrow(
+      /no unreleased change has a kind with a bump/,
+    );
+  });
+
+  test("autoBump bumps the major version for a breaking change", () => {
+    const kinds = DEFAULT_CONFIG.kinds;
+    const changes = [change("Added", "* A"), breakingChange("Fixed", "* B")];
+    expect(autoBump(changes, kinds)).toBe("major");
+    const noted = { label: "Noted", bump: undefined, breaking: "ask" } as const;
+    expect(autoBump([breakingChange("Noted", "* A")], [noted])).toBe("major");
+  });
+
+  test.each([
+    ["Fixed", "", false],
+    ["Fixed", "breaking: true\n", true],
+    ["Fixed", "breaking: false\n", false],
+    ["Fixed", "breaking:\n", false],
+    ["Removed", "", true],
+    ["Removed", "breaking: true\n", true],
+    ["Added", "", false],
+    ["Added", "breaking: false\n", false],
+  ])("a %p change with %p breaks: %p", (kind, entry, expected) => {
+    const text = `---\nkind: ${kind}\n${entry}---\n* Change\n`;
+    expect(parseChange(text, kinds).breaking).toBe(expected);
+  });
+
+  test.each([
+    [
+      "Added",
+      "breaking: true",
+      'breaking: true contradicts kind "Added", which never breaks',
+    ],
+    [
+      "Removed",
+      "breaking: false",
+      'breaking: false contradicts kind "Removed", which always breaks',
+    ],
+    ["Fixed", "breaking: yes", "breaking must be true or false"],
+  ])("a %p change rejects %p", (kind, entry, message) => {
+    const text = `---\nkind: ${kind}\n${entry}\n---\n* Change\n`;
+    expect(() => parseChange(text, kinds)).toThrow(message);
+  });
+
+  test("serializeChange writes breaking only for a breaking change", () => {
+    const text = serializeChange(breakingChange("Fixed", "* Crash", { pr: 7 }));
+    expect(text).toBe(
+      "---\nkind: Fixed\nbreaking: true\npr: 7\n---\n* Crash\n",
+    );
+    expect(parseChange(text, kinds)).toEqual(
+      breakingChange("Fixed", "* Crash", { pr: 7 }),
+    );
+    expect(serializeChange(change("Fixed", "* Crash"))).not.toContain(
+      "breaking",
+    );
   });
 });
