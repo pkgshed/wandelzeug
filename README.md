@@ -80,6 +80,7 @@ To keep wandelzeug inside another repository instead, download the single execut
 - [The changelog](docs/changelog.md) covers the markers, links, templates, adopting an existing changelog, and removing wandelzeug again.
 - [Releases](docs/releases.md) covers versions, releasing and tagging, version numbers in other files, and monorepos.
 - [Shell completion](docs/completion.md) covers installing the completion script for each shell.
+- [Coding agents](docs/agents.md) covers the skill that teaches agents such as Claude Code to record changes with `wlz`.
 
 ## Prior art
 
