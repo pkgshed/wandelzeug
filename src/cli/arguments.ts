@@ -5,7 +5,7 @@
  * this directory is the only place that imports Optique.
  */
 
-import { object, or } from "@optique/core/constructs";
+import { merge, object, or } from "@optique/core/constructs";
 import { runParserSync } from "@optique/core/facade";
 import {
   commandLine,
@@ -154,7 +154,6 @@ const resumeMode = object({
   resume: flag("-r", "--resume", {
     description: message`Continue the draft that an earlier ${optionName("--edit")} kept`,
   }),
-  ...COMMON_OPTIONS,
 });
 
 /** "new --empty" records an empty change, which takes no content options either. */
@@ -169,7 +168,6 @@ const emptyMode = object({
       description: message`Why the change is not notable, which the changelog never shows`,
     }),
   ),
-  ...COMMON_OPTIONS,
 });
 
 const writeMode = object({
@@ -180,14 +178,36 @@ const writeMode = object({
     message`Write the change in $VISUAL or $EDITOR`,
   ),
   ...changeOptions,
-  ...COMMON_OPTIONS,
 });
 
+/**
+ * A bare "wlz new", which writes a change and asks for all of it. or()
+ * only picks a branch after it reads an option of that branch, so without
+ * one it needs this default. The common options sit outside or() for the
+ * same reason, so "wlz new -C DIR" alone also writes a change.
+ */
+const BARE_NEW: InferValue<typeof writeMode> = {
+  command: "new",
+  mode: "write",
+  edit: false,
+  kind: undefined,
+  body: undefined,
+  meta: [],
+  breaking: undefined,
+};
+
 /** "new" resumes a kept draft, records an empty change, or writes a new change. */
-const newCommand = command("new", or(resumeMode, emptyMode, writeMode), {
-  brief: message`Record a change in the unreleased directory`,
-  description: message`When stdin is a terminal, new asks for whatever the options leave out: the kind, or no notable change for an empty change, the body, whether the change breaks when its kind has breaking: ask, and each extra field. Without a terminal, such a kind needs ${optionName("--breaking")} or ${optionName("--no-breaking")}. To leave an optional field empty without a question, pass ${optionName("--meta")} with an empty value, such as pr=. With ${optionName("--edit")}, the draft stays in .changes/.draft.md until the change is recorded, so ${optionName("--resume")} can reopen it after a problem.`,
-});
+const newCommand = command(
+  "new",
+  merge(
+    withDefault(or(resumeMode, emptyMode, writeMode), BARE_NEW),
+    object(COMMON_OPTIONS),
+  ),
+  {
+    brief: message`Record a change in the unreleased directory`,
+    description: message`When stdin is a terminal, new asks for whatever the options leave out: the kind, or no notable change for an empty change, the body, whether the change breaks when its kind has breaking: ask, and each extra field. Without a terminal, such a kind needs ${optionName("--breaking")} or ${optionName("--no-breaking")}. To leave an optional field empty without a question, pass ${optionName("--meta")} with an empty value, such as pr=. With ${optionName("--edit")}, the draft stays in .changes/.draft.md until the change is recorded, so ${optionName("--resume")} can reopen it after a problem.`,
+  },
+);
 
 const checkCommand = command(
   "check",

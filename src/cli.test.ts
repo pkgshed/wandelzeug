@@ -300,6 +300,32 @@ describe("command line", () => {
     expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toBe(changelog);
   });
 
+  test.each([[[]], [["-C", "."]]])(
+    "new %p without options reaches the questions",
+    async (args) => {
+      await run("init");
+      const result = await run("new", ...args);
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr).toContain(
+        "missing --kind, and stdin is not a terminal to ask for it",
+      );
+    },
+  );
+
+  test.each([
+    [
+      ["-k", "Added", "--empty"],
+      '"-k" "Added" and "--empty" cannot be used together',
+    ],
+    [["--reason", "x"], "Required flag `--empty` is missing"],
+  ])("new %p fails to parse", async (args, message) => {
+    await run("init");
+    const result = await run("new", ...args);
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain(message);
+    expect(await unreleasedFiles()).toEqual([".gitkeep"]);
+  });
+
   test("new without a terminal needs --kind", async () => {
     await run("init");
     const result = await run("new", "-b", "* Crash");
