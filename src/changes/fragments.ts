@@ -48,6 +48,20 @@ export type Fragment = Change & {
   readonly sequence: number | undefined;
 };
 
+/**
+ * What a change file holds: a change, or an empty change. An empty change
+ * states that a branch has nothing notable for the changelog, so that
+ * "wlz check --since" passes. Its optional reason never renders.
+ */
+export type ChangeFile =
+  | { readonly type: "change"; readonly change: Change }
+  | { readonly type: "empty"; readonly reason: string | undefined };
+
+export type EmptyChange = Extract<ChangeFile, { type: "empty" }>;
+
+/** An empty change read from the unreleased directory. */
+export type EmptyFragment = EmptyChange & { readonly path: string };
+
 export function checkMetadataEntry(
   key: string,
   value: unknown,
@@ -168,23 +182,71 @@ export function resolveBreaking(
 }
 
 /**
- * Parses the text of a fragment file and resolves its kind against the
+ * Reads an empty change from front matter that holds "empty: true", or
+ * returns undefined when the front matter has no "empty" entry. The body
+ * is the reason, which may be empty.
+ */
+function parseEmptyChange(
+  fields: RawRecord,
+  body: string,
+): EmptyChange | undefined {
+  const { empty, ...others } = fields;
+  if (empty === undefined || empty === null) return undefined;
+  if (empty !== true) {
+    throw new Error("empty must be true");
+  }
+  const keys = Object.keys(others).map((key) => JSON.stringify(key));
+  if (keys.length > 0) {
+    throw new Error(
+      `an empty change holds nothing besides its reason, found ${keys.join(", ")}`,
+    );
+  }
+  return { type: "empty", reason: body === "" ? undefined : body };
+}
+
+/**
+ * Builds a change from front matter and resolves its kind against the
  * configured kinds, which also decides whether the change breaks.
  */
-export function parseChange(text: string, kinds: readonly Kind[]): Change {
-  const document = splitFrontMatter(text);
-  const fields: unknown = Bun.YAML.parse(document.frontMatter);
-  if (!isRecord(fields)) {
-    throw new Error("front matter must be a mapping");
-  }
-
-  const stated = changeFromFields(fields, document.body);
+function changeOfKind(
+  fields: RawRecord,
+  body: string,
+  kinds: readonly Kind[],
+): Change {
+  const stated = changeFromFields(fields, body);
   const kind = resolveKind(kinds, stated.kind);
   return {
     ...stated,
     kind: kind.label,
     breaking: resolveBreaking(kind, stated.breaking),
   };
+}
+
+/** Parses the text of a fragment file: a change, or an empty change. */
+export function parseChangeFile(
+  text: string,
+  kinds: readonly Kind[],
+): ChangeFile {
+  const document = splitFrontMatter(text);
+  const fields: unknown = Bun.YAML.parse(document.frontMatter);
+  if (!isRecord(fields)) {
+    throw new Error("front matter must be a mapping");
+  }
+
+  const empty = parseEmptyChange(fields, document.body);
+  if (empty !== undefined) return empty;
+  return { type: "change", change: changeOfKind(fields, document.body, kinds) };
+}
+
+/** Parses the text of a fragment file that must hold a change, such as a draft. */
+export function parseChange(text: string, kinds: readonly Kind[]): Change {
+  const file = parseChangeFile(text, kinds);
+  if (file.type === "empty") {
+    throw new Error(
+      'empty: true marks an empty change, which "wlz new --empty" records',
+    );
+  }
+  return file.change;
 }
 
 /**
@@ -203,6 +265,12 @@ export function yamlEntry(key: string, value: MetadataValue): string {
     .split("\n")
     .map((line) => (line === "" ? "" : `  ${line}`));
   return [`${Bun.YAML.stringify(key)}: ${indicator}`, ...lines].join("\n");
+}
+
+/** Formats an empty change as the text of a fragment file, with its reason as the body. */
+export function serializeEmptyChange(empty: EmptyChange): string {
+  const body = empty.reason === undefined ? "" : `${empty.reason}\n`;
+  return `---\nempty: true\n---\n${body}`;
 }
 
 /** Formats a change as the text of a fragment file. Only a breaking change says so. */
@@ -286,6 +354,10 @@ function fragmentNameValues(
   };
 }
 
+/** The start of every fragment file name: "nnn-<id>". */
+const fragmentPrefix = (sequence: number, id: FragmentId): string =>
+  `${String(sequence).padStart(SEQUENCE_WIDTH, "0")}-${id}`;
+
 /** Builds the file name "nnn-<id>-<fragmentName>.md" for a change. */
 export function fragmentFileName(
   project: Project,
@@ -293,44 +365,71 @@ export function fragmentFileName(
   id: FragmentId,
   change: Change,
 ): string {
-  const prefix = `${String(sequence).padStart(SEQUENCE_WIDTH, "0")}-${id}`;
+  const prefix = fragmentPrefix(sequence, id);
   const values = fragmentNameValues(change, project.config.titleMaxLength);
   const name = renderTemplate(project.templates.fragmentName, values);
   return name === "" ? `${prefix}.md` : `${prefix}-${name}.md`;
 }
 
-/** Writes a change to the next free fragment file and returns its path. */
-export async function recordChange(
+/** Builds the file name "nnn-<id>-empty.md" for an empty change. */
+export const emptyFileName = (sequence: number, id: FragmentId): string =>
+  `${fragmentPrefix(sequence, id)}-empty.md`;
+
+/** Names a fragment file after its sequence number and ID. */
+type FileNamer = (sequence: number, id: FragmentId) => string;
+
+/** Writes the text of a fragment file under the next free sequence number and returns its path. */
+async function writeNextFragment(
   project: Project,
-  change: Change,
+  name: FileNamer,
+  text: string,
 ): Promise<string> {
   const directory = unreleasedPath(project);
   await mkdir(directory, { recursive: true });
   const sequence = nextSequence(await listDirectory(directory));
-  const fileName = fragmentFileName(
-    project,
-    sequence,
-    randomFragmentId(),
-    change,
-  );
-  const path = join(directory, fileName);
-  await writeFile(path, serializeChange(change), { flag: "wx" });
+  const path = join(directory, name(sequence, randomFragmentId()));
+  await writeFile(path, text, { flag: "wx" });
   return path;
 }
+
+/** Writes a change to the next free fragment file and returns its path. */
+export const recordChange = (
+  project: Project,
+  change: Change,
+): Promise<string> =>
+  writeNextFragment(
+    project,
+    (sequence, id) => fragmentFileName(project, sequence, id, change),
+    serializeChange(change),
+  );
+
+/** Writes a change or an empty change to the next free fragment file and returns its path. */
+export function recordChangeFile(
+  project: Project,
+  file: ChangeFile,
+): Promise<string> {
+  if (file.type === "change") return recordChange(project, file.change);
+  return writeNextFragment(project, emptyFileName, serializeEmptyChange(file));
+}
+
+/** A fragment file as read from the unreleased directory. */
+type ReadFragment =
+  | { readonly type: "change"; readonly fragment: Fragment }
+  | { readonly type: "empty"; readonly empty: EmptyFragment };
 
 async function readFragment(
   path: string,
   kinds: readonly Kind[],
-): Promise<Fragment> {
+): Promise<ReadFragment> {
   const text = await readFile(path, "utf8");
-  const change = withContext(`parse ${displayPath(path)}`, () =>
-    parseChange(text, kinds),
+  const file = withContext(`parse ${displayPath(path)}`, () =>
+    parseChangeFile(text, kinds),
   );
-  return {
-    ...change,
-    path,
-    sequence: fragmentSequence(basename(path)),
-  };
+  if (file.type === "empty") {
+    return { type: "empty", empty: { ...file, path } };
+  }
+  const sequence = fragmentSequence(basename(path));
+  return { type: "change", fragment: { ...file.change, path, sequence } };
 }
 
 /** Orders fragments by sequence number. Fragments without one come last. */
@@ -341,14 +440,28 @@ function compareFragments(a: Fragment, b: Fragment): number {
   return compareStrings(basename(a.path), basename(b.path));
 }
 
-/** Reads all unreleased fragments in changelog order. */
-export async function loadFragments(project: Project): Promise<Fragment[]> {
+/** The files of the unreleased directory: the changes, and the empty changes. */
+export type UnreleasedFiles = {
+  /** The changes in changelog order. */
+  readonly fragments: readonly Fragment[];
+  readonly empty: readonly EmptyFragment[];
+};
+
+/** Reads all unreleased fragment files. */
+export async function loadUnreleased(
+  project: Project,
+): Promise<UnreleasedFiles> {
   const directory = unreleasedPath(project);
   const fileNames = (await listDirectory(directory)).filter(isFragmentFile);
-  const fragments = await Promise.all(
+  const files = await Promise.all(
     fileNames.map((fileName) =>
       readFragment(join(directory, fileName), project.config.kinds),
     ),
   );
-  return fragments.sort(compareFragments);
+  return {
+    fragments: files
+      .flatMap((file) => (file.type === "change" ? [file.fragment] : []))
+      .sort(compareFragments),
+    empty: files.flatMap((file) => (file.type === "empty" ? [file.empty] : [])),
+  };
 }

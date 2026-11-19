@@ -7,7 +7,7 @@ import { basename, join, relative } from "node:path";
 import { MISSING_CHANGELOG, parseChangelog } from "../changelog/markers.ts";
 import { releaseDataProblems } from "../changelog/render.ts";
 import { applyExtraFields } from "../changes/fields.ts";
-import { isFragmentFile, parseChange } from "../changes/fragments.ts";
+import { isFragmentFile, parseChangeFile } from "../changes/fragments.ts";
 import {
   attempt,
   listDirectory,
@@ -25,26 +25,39 @@ export type Problem = {
 
 /** What "wlz check" found in the unreleased directory and the changelog. */
 export type CheckReport = {
-  /** The number of unreleased fragments. */
-  readonly checked: number;
+  /** The number of unreleased fragment files that hold a change, or fail to parse. */
+  readonly changes: number;
+  /** The number of empty changes. */
+  readonly emptyChanges: number;
   readonly problems: readonly Problem[];
 };
 
+/** What "wlz check" found in one fragment file. */
+type FragmentInspection = {
+  readonly empty: boolean;
+  readonly problems: readonly Problem[];
+};
+
+/** Checks a fragment file. An empty change has no fields, so the extra fields leave it alone. */
 async function inspectFragment(
   config: Config,
   path: string,
-): Promise<Problem[]> {
+): Promise<FragmentInspection> {
   const text = await readFile(path, "utf8");
-  const parsed = attempt(() => parseChange(text, config.kinds));
+  const parsed = attempt(() => parseChangeFile(text, config.kinds));
   if (!parsed.ok) {
-    return [{ path, message: parsed.error }];
+    return { empty: false, problems: [{ path, message: parsed.error }] };
+  }
+  if (parsed.value.type === "empty") {
+    return { empty: true, problems: [] };
   }
 
   const { problems } = applyExtraFields(
     config.extraFields,
-    parsed.value.metadata,
+    parsed.value.change.metadata,
   );
-  return problems.map((message) => ({ path, message }));
+  const found = problems.map((message) => ({ path, message }));
+  return { empty: false, problems: found };
 }
 
 async function inspectChangelog(project: Project): Promise<Problem[]> {
@@ -69,15 +82,17 @@ async function inspectChangelog(project: Project): Promise<Problem[]> {
 export async function checkProject(project: Project): Promise<CheckReport> {
   const directory = unreleasedPath(project);
   const fileNames = (await listDirectory(directory)).filter(isFragmentFile);
-  const fragmentProblems = await Promise.all(
+  const inspections = await Promise.all(
     fileNames.map((fileName) =>
       inspectFragment(project.config, join(directory, fileName)),
     ),
   );
+  const emptyChanges = inspections.filter((found) => found.empty).length;
   return {
-    checked: fileNames.length,
+    changes: inspections.length - emptyChanges,
+    emptyChanges,
     problems: [
-      ...fragmentProblems.flat(),
+      ...inspections.flatMap((found) => found.problems),
       ...(await inspectChangelog(project)),
     ],
   };

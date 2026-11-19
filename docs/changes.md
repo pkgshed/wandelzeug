@@ -1,6 +1,6 @@
 # Change files
 
-This guide covers the format of change files, how `wlz new` records them, breaking changes, extra fields, links to issues and pull requests, and how `wlz check` validates them in CI.
+This guide covers the format of change files, how `wlz new` records them, breaking changes, extra fields, links to issues and pull requests, how `wlz check` validates them in CI, and empty changes for branches without anything notable.
 
 ## The file format
 
@@ -18,7 +18,7 @@ Change files live in `.changes/unreleased/nnn-ID-NAME.md`, such as `001-k7m2q-ad
 
 ## Record a change
 
-`new` takes the kind, the body, and metadata from its options. When stdin is a terminal, it asks for whatever the options leave out: the kind, a one-line body, whether the change breaks when its kind leaves that open, and each extra field. You pick the kind and the options of `enum` and `enums` fields from a list, and `new` checks each answer before it moves on. A body line without a list marker becomes a `* ` item. To cancel, press Ctrl+C, and nothing gets recorded.
+`new` takes the kind, the body, and metadata from its options. When stdin is a terminal, it asks for whatever the options leave out: the kind, a one-line body, whether the change breaks when its kind leaves that open, and each extra field. You pick the kind and the options of `enum` and `enums` fields from a list, and `new` checks each answer before it moves on. The list of kinds ends with "No notable change", which records an [empty change](#record-an-empty-change) instead. A body line without a list marker becomes a `* ` item. To cancel, press Ctrl+C, and nothing gets recorded.
 
 To write a longer change, pass `--edit`. The command writes a draft to `.changes/.draft.md`, filled in from the options, with comments that list the kinds and the open extra fields, and opens it in `$VISUAL` or `$EDITOR`. After the editor closes, `new` checks the draft. When it has problems, the command asks whether to edit it again. An empty body cancels the change.
 
@@ -134,3 +134,24 @@ wlz check --since origin/main
 ```
 
 The check needs the history of `REF`. With `actions/checkout`, set `fetch-depth: 0`.
+
+## Record an empty change
+
+A branch without anything notable for the changelog, such as a refactoring or a change to CI, records an empty change, so `check --since` passes:
+
+```sh
+wlz new --empty --reason "Refactoring only"
+```
+
+The command writes `.changes/unreleased/nnn-ID-empty.md`, which holds `empty: true` in its front matter and the reason, if any, as its body:
+
+```md
+---
+empty: true
+---
+Refactoring only
+```
+
+Reviewers see the empty change in the pull request, so the decision gets a review like any other change. The reason never shows in the changelog. An empty change takes no kind, body, or extra fields, and `check` reports a file that holds `empty: true` together with anything else.
+
+`batch` and `release` delete the empty changes along with the changes that they release. Empty changes alone are nothing to release, so they wait for the next release with a notable change. `offboard` deletes them without asking for `--force`, because they hold no recorded work.

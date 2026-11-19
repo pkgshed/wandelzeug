@@ -6,8 +6,9 @@
 import { rm, writeFile } from "node:fs/promises";
 import {
   type Change,
+  type EmptyFragment,
   type Fragment,
-  loadFragments,
+  loadUnreleased,
 } from "../changes/fragments.ts";
 import { type Config, findKind, type Kind } from "../project/config.ts";
 import { type FileUpdate, planReplacements } from "../project/replacements.ts";
@@ -17,7 +18,7 @@ import {
   type Templates,
   unreleasedPath,
 } from "../project/root.ts";
-import { displayPath } from "../shared/foundations.ts";
+import { countOf, displayPath } from "../shared/foundations.ts";
 import { listItems } from "../shared/markdown.ts";
 import {
   definitionLine,
@@ -74,6 +75,9 @@ export function autoBump(
   changes: readonly Change[],
   kinds: readonly Kind[],
 ): Bump {
+  if (changes.length === 0) {
+    throw new Error("auto bump: no unreleased changes");
+  }
   const bumps = new Set(changes.map((change) => changeBump(change, kinds)));
   const bump = BUMPS.find((candidate) => bumps.has(candidate));
   if (bump === undefined) {
@@ -413,7 +417,17 @@ export type ReleasePlan = {
   /** The files besides the changelog that the replacements rewrite. */
   readonly updates: readonly FileUpdate[];
   readonly fragments: readonly Fragment[];
+  /** The empty changes, which the release deletes without a trace in the changelog. */
+  readonly emptyChanges: readonly EmptyFragment[];
 };
+
+/** Explains why there is nothing to release, which empty changes alone do not change. */
+function nothingToRelease(project: Project, empty: number): string {
+  const directory = displayPath(unreleasedPath(project));
+  if (empty === 0) return `batch: no unreleased changes in ${directory}`;
+  const only = countOf(empty, "empty change");
+  return `batch: no notable changes in ${directory}, only ${only}`;
+}
 
 /**
  * Plans the release of all unreleased changes without writing anything. The
@@ -425,11 +439,9 @@ export async function planRelease(
   target: ReleaseTarget,
   date: IsoDate,
 ): Promise<ReleasePlan> {
-  const fragments = await loadFragments(project);
+  const { fragments, empty } = await loadUnreleased(project);
   if (fragments.length === 0) {
-    throw new Error(
-      `batch: no unreleased changes in ${displayPath(unreleasedPath(project))}`,
-    );
+    throw new Error(nothingToRelease(project, empty.length));
   }
 
   const document = await readChangelog(project);
@@ -468,6 +480,7 @@ export async function planRelease(
     content: insertRelease(document, section, links),
     updates: await planReplacements(project.replacements, values),
     fragments,
+    emptyChanges: empty,
   };
 }
 
@@ -479,9 +492,10 @@ export async function writeRelease(plan: ReleasePlan): Promise<void> {
   );
 }
 
-/** Deletes the fragment files that a release consumed. */
-export async function removeFragments(
-  fragments: readonly Fragment[],
+/** Deletes the fragment files that a release consumed, including the empty changes. */
+export async function removeChangeFiles(
+  plan: Pick<ReleasePlan, "fragments" | "emptyChanges">,
 ): Promise<void> {
-  await Promise.all(fragments.map((fragment) => rm(fragment.path)));
+  const files = [...plan.fragments, ...plan.emptyChanges];
+  await Promise.all(files.map((file) => rm(file.path)));
 }

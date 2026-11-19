@@ -147,37 +147,47 @@ const changeOptions = {
   ),
 };
 
-/**
- * "new" either resumes a kept draft or writes a new change. A resumed draft
- * holds the whole change already, so it takes no content options.
- */
-const newCommand = command(
-  "new",
-  or(
-    object({
-      command: constant("new"),
-      mode: constant("resume"),
-      resume: flag("-r", "--resume", {
-        description: message`Continue the draft that an earlier ${optionName("--edit")} kept`,
-      }),
-      ...COMMON_OPTIONS,
-    }),
-    object({
-      command: constant("new"),
-      mode: constant("write"),
-      edit: switchFlag(
-        ["-e", "--edit"],
-        message`Write the change in $VISUAL or $EDITOR`,
-      ),
-      ...changeOptions,
-      ...COMMON_OPTIONS,
+/** "new --resume" reopens a kept draft, which holds the whole change already, so it takes no content options. */
+const resumeMode = object({
+  command: constant("new"),
+  mode: constant("resume"),
+  resume: flag("-r", "--resume", {
+    description: message`Continue the draft that an earlier ${optionName("--edit")} kept`,
+  }),
+  ...COMMON_OPTIONS,
+});
+
+/** "new --empty" records an empty change, which takes no content options either. */
+const emptyMode = object({
+  command: constant("new"),
+  mode: constant("empty"),
+  empty: flag("--empty", {
+    description: message`Record that the branch has no notable change, so ${commandLine("wlz check --since")} passes`,
+  }),
+  reason: optional(
+    option("--reason", string({ metavar: "TEXT" }), {
+      description: message`Why the change is not notable, which the changelog never shows`,
     }),
   ),
-  {
-    brief: message`Record a change in the unreleased directory`,
-    description: message`When stdin is a terminal, new asks for whatever the options leave out: the kind, the body, whether the change breaks when its kind has breaking: ask, and each extra field. Without a terminal, such a kind needs ${optionName("--breaking")} or ${optionName("--no-breaking")}. To leave an optional field empty without a question, pass ${optionName("--meta")} with an empty value, such as pr=. With ${optionName("--edit")}, the draft stays in .changes/.draft.md until the change is recorded, so ${optionName("--resume")} can reopen it after a problem.`,
-  },
-);
+  ...COMMON_OPTIONS,
+});
+
+const writeMode = object({
+  command: constant("new"),
+  mode: constant("write"),
+  edit: switchFlag(
+    ["-e", "--edit"],
+    message`Write the change in $VISUAL or $EDITOR`,
+  ),
+  ...changeOptions,
+  ...COMMON_OPTIONS,
+});
+
+/** "new" resumes a kept draft, records an empty change, or writes a new change. */
+const newCommand = command("new", or(resumeMode, emptyMode, writeMode), {
+  brief: message`Record a change in the unreleased directory`,
+  description: message`When stdin is a terminal, new asks for whatever the options leave out: the kind, or no notable change for an empty change, the body, whether the change breaks when its kind has breaking: ask, and each extra field. Without a terminal, such a kind needs ${optionName("--breaking")} or ${optionName("--no-breaking")}. To leave an optional field empty without a question, pass ${optionName("--meta")} with an empty value, such as pr=. With ${optionName("--edit")}, the draft stays in .changes/.draft.md until the change is recorded, so ${optionName("--resume")} can reopen it after a problem.`,
+});
 
 const checkCommand = command(
   "check",

@@ -17,7 +17,7 @@ wandelzeug records each change as its own small Markdown file and turns the coll
 - **No conflicts in `CHANGELOG.md`:** every branch adds its own change file, and the changelog only changes when you release.
 - **Record changes your way:** pass everything as options in a script, answer a few questions in the terminal, or write the change in your editor.
 - **Keep a Changelog and Semantic Versioning out of the box:** releases come newest first, grouped by kind, with headings that link to the comparison with the previous release.
-- **Changelog entries enforced in CI:** `wlz check --since origin/main` fails a pull request without a change file and validates every entry.
+- **Changelog entries enforced in CI:** `wlz check --since origin/main` fails a pull request without a change file and validates every entry. A pull request without anything notable says so with `wlz new --empty`.
 - **Extra fields:** a pull request number, an area, or any other field that `wlz new` asks for and `wlz check` validates.
 - **Links to issues and pull requests:** references such as `[FOO-1234]` or `[#42]` become links, whether they come from the front matter or the text of a change.
 - **Release in one step:** `wlz release auto` picks the next version from the kinds of the changes and whether they break compatibility, writes the changelog, commits it, and tags the commit with git, or with a tool of your choice such as [semverkzeug](https://github.com/0x5a17ed/semverkzeug).

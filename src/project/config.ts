@@ -23,6 +23,7 @@ export const CONFIG_FILE = join(CHANGES_DIR, "config.yaml");
 /** Keys that templates fill from the change itself, so metadata may not use them. */
 export const RESERVED_KEYS = [
   "kind",
+  "empty",
   "breaking",
   "kindBreaks",
   "title",

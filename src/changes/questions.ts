@@ -9,6 +9,8 @@ import { LIST_MARKER } from "../shared/slugs.ts";
 import { applyExtraFields, checkField } from "./fields.ts";
 import {
   type Change,
+  type ChangeFile,
+  type EmptyChange,
   isBlankBody,
   type Metadata,
   type MetadataValue,
@@ -29,10 +31,44 @@ import {
   type Validate,
 } from "./prompts.ts";
 
-async function askKind(kinds: readonly Kind[]): Promise<Kind> {
+/** The answer to the kind question: a kind, or no notable change. */
+type KindAnswer =
+  { readonly type: "kind"; readonly kind: Kind } | { readonly type: "empty" };
+
+const kindChoices = (kinds: readonly Kind[]): Choice<KindAnswer>[] =>
+  kinds.map((kind) => ({ value: { type: "kind", kind }, label: kind.label }));
+
+/** Options that only a change with a kind can use, so they rule out an empty change. */
+const givesContent = (options: ChangeOptions): boolean =>
+  options.body !== undefined ||
+  options.givenKeys.size > 0 ||
+  options.breaking !== undefined;
+
+/**
+ * Asks for the kind. Unless the options give content for a change, the
+ * list ends with a choice for no notable change, so the empty change is
+ * easy to find.
+ */
+async function askKind(
+  kinds: readonly Kind[],
+  options: ChangeOptions,
+): Promise<KindAnswer> {
   requireTerminal("--kind");
-  const choices = kinds.map((kind) => ({ value: kind, label: kind.label }));
-  return askChoice("Kind", choices);
+  const empty: Choice<KindAnswer>[] = givesContent(options)
+    ? []
+    : [{ value: { type: "empty" }, label: "No notable change" }];
+  return askChoice("Kind", [...kindChoices(kinds), ...empty]);
+}
+
+/** Asks for the optional reason of an empty change. */
+async function askReason(): Promise<EmptyChange> {
+  const answer = await askText(
+    "Reason (optional)",
+    () => undefined,
+    "Refactoring only",
+  );
+  const reason = answer.trim();
+  return { type: "empty", reason: reason === "" ? undefined : reason };
 }
 
 /** Asks for a one-line change. A line without a list marker becomes a "* " item. */
@@ -144,12 +180,30 @@ function completeChange(
   };
 }
 
-/** Builds a change from the options and asks for whatever they leave out. */
+/**
+ * Builds a change from the options and asks for whatever they leave out.
+ * When the answer to the kind question is no notable change, it asks for
+ * the reason of an empty change instead.
+ */
 export async function askChange(
   config: Config,
   options: ChangeOptions,
+): Promise<ChangeFile> {
+  const answer: KindAnswer =
+    options.kind === undefined
+      ? await askKind(config.kinds, options)
+      : { type: "kind", kind: options.kind };
+  if (answer.type === "empty") return askReason();
+  const change = await askChangeOfKind(config, options, answer.kind);
+  return { type: "change", change };
+}
+
+/** Asks for whatever the options leave out of a change of the given kind. */
+async function askChangeOfKind(
+  config: Config,
+  options: ChangeOptions,
+  kind: Kind,
 ): Promise<Change> {
-  const kind = options.kind ?? (await askKind(config.kinds));
   checkBreakingOption(kind, options.breaking);
   const body = (options.body ?? (await askBody())).trim();
   if (isBlankBody(body)) {

@@ -12,10 +12,10 @@ import { join } from "node:path";
 import { notesHash } from "./changelog/data.ts";
 import {
   planRelease,
-  removeFragments,
+  removeChangeFiles,
   writeRelease,
 } from "./changelog/releases.ts";
-import { loadFragments, recordChange } from "./changes/fragments.ts";
+import { loadUnreleased, recordChange } from "./changes/fragments.ts";
 import {
   changedFragments,
   checkProject,
@@ -108,7 +108,7 @@ describe("project workflow", () => {
       "[`0.1.0`]: https://codeberg.org/o/r/releases/tag/v0.1.0",
     ]);
     await writeRelease(first);
-    await removeFragments(first.fragments);
+    await removeChangeFiles(first);
     expect(await unreleasedFiles()).toEqual([".gitkeep"]);
 
     await recordChange(project, change("Fixed", "* Hang on exit"));
@@ -398,7 +398,7 @@ describe("project workflow", () => {
       join(root, ".changes", "unreleased", "001-broken.md"),
       "* no front matter\n",
     );
-    await expect(loadFragments(project)).rejects.toThrow(
+    await expect(loadUnreleased(project)).rejects.toThrow(
       /001-broken\.md: missing front matter/,
     );
   });
@@ -468,7 +468,8 @@ describe("project workflow", () => {
     );
 
     expect(await checkProject(project)).toEqual({
-      checked: 3,
+      changes: 3,
+      emptyChanges: 0,
       problems: [
         {
           path: join(unreleased, "002-broken.md"),
