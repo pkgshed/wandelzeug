@@ -1,10 +1,10 @@
 # Change files
 
-This guide covers the format of change files, how `wlz new` records them, extra fields, links to issues and pull requests, and how `wlz check` validates them in CI.
+This guide covers the format of change files, how `wlz new` records them, breaking changes, extra fields, links to issues and pull requests, and how `wlz check` validates them in CI.
 
 ## The file format
 
-Each change is a Markdown file with YAML front matter. The `kind` key is required and must match a configured kind, ignoring case. Any other key, such as `pr` or `mr`, is metadata that templates can use. The body is the Markdown that appears in the changelog:
+Each change is a Markdown file with YAML front matter. The `kind` key is required and must match a configured kind, ignoring case. The `breaking` key says whether the change breaks compatibility, see [Breaking changes](#breaking-changes). Any other key, such as `pr` or `mr`, is metadata that templates can use. The body is the Markdown that appears in the changelog:
 
 ```md
 ---
@@ -18,11 +18,43 @@ Change files live in `.changes/unreleased/nnn-ID-NAME.md`, such as `001-k7m2q-ad
 
 ## Record a change
 
-`new` takes the kind, the body, and metadata from its options. When stdin is a terminal, it asks for whatever the options leave out: the kind, a one-line body, and each extra field. You pick the kind and the options of `enum` and `enums` fields from a list, and `new` checks each answer before it moves on. A body line without a list marker becomes a `* ` item. To cancel, press Ctrl+C, and nothing gets recorded.
+`new` takes the kind, the body, and metadata from its options. When stdin is a terminal, it asks for whatever the options leave out: the kind, a one-line body, whether the change breaks when its kind leaves that open, and each extra field. You pick the kind and the options of `enum` and `enums` fields from a list, and `new` checks each answer before it moves on. A body line without a list marker becomes a `* ` item. To cancel, press Ctrl+C, and nothing gets recorded.
 
 To write a longer change, pass `--edit`. The command writes a draft to `.changes/.draft.md`, filled in from the options, with comments that list the kinds and the open extra fields, and opens it in `$VISUAL` or `$EDITOR`. After the editor closes, `new` checks the draft. When it has problems, the command asks whether to edit it again. An empty body cancels the change.
 
 The draft stays until the change is recorded, so nothing you write in the editor gets lost. After a problem, a declined edit, or a failed editor, run `wlz new --resume` to reopen the draft. `new --edit` refuses to replace a kept draft. `init` adds a `.changes/.gitignore` that keeps the draft out of version control.
+
+## Breaking changes
+
+A breaking change makes users change something to upgrade, and it bumps the major version, see [Versions](releases.md#versions). The `breaking` setting of each kind decides whether its changes break:
+
+| Value | Changes of the kind break | `new` asks |
+|---|---|---|
+| `no`, the default | never | no |
+| `yes` | always | no |
+| `ask` | when their front matter says `breaking: true` | yes |
+
+The default kinds ask for `Changed` and `Fixed`, and `Removed` always breaks. A kind with `bump: major` always breaks too. A team that settles the question by the kind alone sets every kind to `yes` or `no`, and `new` never asks:
+
+```yaml
+kinds:
+  - label: Added
+    bump: minor
+  - label: Changed
+    bump: minor
+    breaking: ask
+  - label: Removed
+    breaking: yes
+  - label: Fixed
+    bump: patch
+    breaking: ask
+```
+
+For a kind that asks, the question defaults to no. Without a terminal, or with `--no-breaking`, the change does not break, and `--breaking` marks it as breaking without a question. In a draft, the kinds that ask get a `breaking:` line to fill in. `new` writes `breaking: true` into the file of every breaking change, including those of kinds that always break.
+
+A `breaking` entry must agree with the kind, so `check` reports `breaking: true` for a kind that never breaks, and `breaking: false` for a kind that always breaks.
+
+The data block of a release records `breaking: true` for each breaking change, so a later change to the kinds leaves past releases as they are. The default `changeFormat` labels a breaking change as `* **Breaking:** ...`, see [Templates](changelog.md#templates). Releases that `wlz import` converts mark no change as breaking, because their notes stay as they are.
 
 ## Extra fields
 

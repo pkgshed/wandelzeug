@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isoDate } from "../test-helpers.ts";
+import { breakingChange, change, isoDate } from "../test-helpers.ts";
 import {
   formatDataAttributes,
   formatDataChanges,
@@ -37,11 +37,12 @@ describe("release data", () => {
     changes: [
       {
         kind: "Added",
-        metadata: { pr: 42, breaking: true, team: "core" },
+        breaking: true,
+        metadata: { pr: 42, draft: true, team: "core" },
         body: "* Support for TOML config\n\n  ```toml\n  key = 1\n  ```",
       },
-      { kind: "Fixed", metadata: {}, body: "  * Indented first line" },
-      { kind: "Fixed", metadata: { note: "a --> b" }, body: "* A --!> B" },
+      change("Fixed", "  * Indented first line"),
+      change("Fixed", "* A --!> B", { note: "a --> b" }),
     ],
   };
 
@@ -71,9 +72,9 @@ describe("release data", () => {
   test("the changes group by kind, in the order of their first change", () => {
     expect(
       formatDataChanges([
-        { kind: "Added", metadata: { pr: 7 }, body: "* One\n* Two" },
-        { kind: "Fixed", metadata: {}, body: "* Crash" },
-        { kind: "Added", metadata: {}, body: "* Three" },
+        change("Added", "* One\n* Two", { pr: 7 }),
+        change("Fixed", "* Crash"),
+        breakingChange("Added", "* Three", { pr: 8 }),
       ]),
     ).toEqual([
       "Added:",
@@ -81,16 +82,26 @@ describe("release data", () => {
       "    body: |-",
       "      * One",
       "      * Two",
-      '  - body: "* Three"',
+      "  - breaking: true",
+      "    pr: 8",
+      '    body: "* Three"',
       "Fixed:",
       '  - body: "* Crash"',
     ]);
   });
 
+  test("a change without breaking: true does not break, whatever its kind", () => {
+    const parsed = parseReleaseData(
+      `date=2026-11-17 hash=${notesHash("x")}`,
+      'Removed:\n  - body: "* Option"',
+    );
+    expect(parsed.changes).toEqual([change("Removed", "* Option")]);
+  });
+
   test("a kind that holds --> stays inside the comment", () => {
     const tricky = {
       ...data,
-      changes: [{ kind: "A --> B", metadata: {}, body: "* x" }],
+      changes: [change("A --> B", "* x")],
     };
     expect(formatDataChanges(tricky.changes)).toContain('"A -\\x2D> B":');
     expect(roundTrip(tricky).changes[0]?.kind).toBe("A --> B");

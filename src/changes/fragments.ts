@@ -27,8 +27,19 @@ export type Metadata = Readonly<Record<string, MetadataValue>>;
 /** One change. Its kind always holds the label of a configured kind. */
 export type Change = {
   readonly kind: string;
+  /** Whether the change breaks compatibility, which bumps the major version. */
+  readonly breaking: boolean;
   readonly metadata: Metadata;
   readonly body: string;
+};
+
+/**
+ * A change as its fields state it. Without a "breaking" entry, whoever
+ * reads the change decides what that means: a fragment file takes the
+ * breaking policy of its kind, and a data block means not breaking.
+ */
+export type StatedChange = Omit<Change, "breaking"> & {
+  readonly breaking: boolean | undefined;
 };
 
 /** A change read from a fragment file in the unreleased directory. */
@@ -93,23 +104,73 @@ export function splitFrontMatter(text: string): FrontMatterDocument {
   };
 }
 
+/** Parses a "breaking" entry. An empty YAML value, such as "breaking:", means the entry is absent. */
+function parseBreaking(value: unknown): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "boolean") {
+    throw new Error("breaking must be true or false");
+  }
+  return value;
+}
+
 /**
  * Builds a change from its fields and its body, as a fragment file or the
  * data block of a release holds them. The kind stays as written, for the
  * caller to resolve against the configured kinds.
  */
-export function changeFromFields(fields: RawRecord, body: string): Change {
-  const { kind, ...metadata } = fields;
+export function changeFromFields(
+  fields: RawRecord,
+  body: string,
+): StatedChange {
+  const { kind, breaking, ...metadata } = fields;
   if (typeof kind !== "string") {
     throw new Error("kind is missing");
   }
   if (isBlankBody(body)) {
     throw new Error("body is empty");
   }
-  return { kind, metadata: parseMetadata(metadata), body };
+  return {
+    kind,
+    breaking: parseBreaking(breaking),
+    metadata: parseMetadata(metadata),
+    body,
+  };
 }
 
-/** Parses the text of a fragment file and resolves its kind against the configured kinds. */
+/**
+ * Decides whether a change of a kind breaks compatibility. A kind that
+ * always or never breaks answers for its changes, and a stated answer must
+ * agree with it. A kind that asks takes the stated answer, and a change
+ * without one does not break.
+ */
+export function resolveBreaking(
+  kind: Kind,
+  stated: boolean | undefined,
+): boolean {
+  switch (kind.breaking) {
+    case "yes":
+      if (stated === false) {
+        throw new Error(
+          `breaking: false contradicts kind ${JSON.stringify(kind.label)}, which always breaks`,
+        );
+      }
+      return true;
+    case "no":
+      if (stated === true) {
+        throw new Error(
+          `breaking: true contradicts kind ${JSON.stringify(kind.label)}, which never breaks`,
+        );
+      }
+      return false;
+    case "ask":
+      return stated ?? false;
+  }
+}
+
+/**
+ * Parses the text of a fragment file and resolves its kind against the
+ * configured kinds, which also decides whether the change breaks.
+ */
 export function parseChange(text: string, kinds: readonly Kind[]): Change {
   const document = splitFrontMatter(text);
   const fields: unknown = Bun.YAML.parse(document.frontMatter);
@@ -117,8 +178,13 @@ export function parseChange(text: string, kinds: readonly Kind[]): Change {
     throw new Error("front matter must be a mapping");
   }
 
-  const change = changeFromFields(fields, document.body);
-  return { ...change, kind: resolveKind(kinds, change.kind).label };
+  const stated = changeFromFields(fields, document.body);
+  const kind = resolveKind(kinds, stated.kind);
+  return {
+    ...stated,
+    kind: kind.label,
+    breaking: resolveBreaking(kind, stated.breaking),
+  };
 }
 
 /**
@@ -139,10 +205,11 @@ export function yamlEntry(key: string, value: MetadataValue): string {
   return [`${Bun.YAML.stringify(key)}: ${indicator}`, ...lines].join("\n");
 }
 
-/** Formats a change as the text of a fragment file. */
+/** Formats a change as the text of a fragment file. Only a breaking change says so. */
 export function serializeChange(change: Change): string {
   const entries = [
     yamlEntry("kind", change.kind),
+    ...(change.breaking ? [yamlEntry("breaking", true)] : []),
     ...Object.entries(change.metadata).map(([key, value]) =>
       yamlEntry(key, value),
     ),

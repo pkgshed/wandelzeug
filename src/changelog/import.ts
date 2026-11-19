@@ -103,7 +103,11 @@ function readChanges(
       return misfit("it has a list before its first kind heading");
     }
     const kind = section.label;
-    changes.push(...block.items.map((body) => ({ kind, metadata: {}, body })));
+    // The notes stay as they are, and they mark no change as breaking.
+    const breaking = false;
+    changes.push(
+      ...block.items.map((body) => ({ kind, breaking, metadata: {}, body })),
+    );
   }
   return changes.length === 0 ? misfit("it lists no changes") : fit(changes);
 }

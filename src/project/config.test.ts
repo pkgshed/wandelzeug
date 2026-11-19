@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { projectWith } from "../test-helpers.ts";
-import { DEFAULT_CONFIG, parseConfig } from "./config.ts";
+import type { Bump } from "../shared/versions.ts";
+import { type BreakingPolicy, DEFAULT_CONFIG, parseConfig } from "./config.ts";
 import { initConfig } from "./setup.ts";
 
 describe("configuration", () => {
@@ -35,8 +36,44 @@ describe("configuration", () => {
       kinds: ["Added", { label: "Fixed", bump: "patch" }],
     });
     expect(config.kinds).toEqual([
-      { label: "Added", bump: undefined },
-      { label: "Fixed", bump: "patch" },
+      { label: "Added", bump: undefined, breaking: "no" },
+      { label: "Fixed", bump: "patch", breaking: "no" },
+    ]);
+  });
+
+  const kindCases: [
+    { readonly label: string } & Record<string, unknown>,
+    Bump | undefined,
+    BreakingPolicy,
+  ][] = [
+    [{ label: "Removed", breaking: "yes" }, "major", "yes"],
+    [{ label: "Removed", bump: "major" }, "major", "yes"],
+    [{ label: "Removed", bump: "major", breaking: "yes" }, "major", "yes"],
+    [{ label: "Removed", breaking: true }, "major", "yes"],
+    [{ label: "Fixed", bump: "patch", breaking: "ask" }, "patch", "ask"],
+    [{ label: "Fixed", bump: "patch", breaking: false }, "patch", "no"],
+    [{ label: "Noted", breaking: "ask" }, undefined, "ask"],
+  ];
+
+  test.each(kindCases)(
+    "the kind %p bumps %p and breaks %p",
+    (kind, bump, breaking) => {
+      const [settled] = parseConfig({ kinds: [kind] }).kinds;
+      expect(settled).toEqual({ label: kind.label, bump, breaking });
+    },
+  );
+
+  test("the default kinds ask whether changes and fixes break", () => {
+    const policies = DEFAULT_CONFIG.kinds.map(
+      (kind) => `${kind.label}: ${kind.bump ?? "none"}, ${kind.breaking}`,
+    );
+    expect(policies).toEqual([
+      "Added: minor, no",
+      "Changed: minor, ask",
+      "Deprecated: minor, no",
+      "Removed: major, yes",
+      "Fixed: patch, ask",
+      "Security: patch, no",
     ]);
   });
 
@@ -44,6 +81,22 @@ describe("configuration", () => {
     [{ changesdir: ".changes" }, /unknown setting "changesdir"/],
     [{ changesDir: ".changes" }, /unknown setting "changesDir"/],
     [{ titleMaxLength: 0 }, /titleMaxLength: must be a positive integer/],
+    [
+      { kinds: [{ label: "Fixed", breaking: "maybe" }] },
+      /kinds\[0\]\.breaking: must be one of: yes, no, ask/,
+    ],
+    [
+      { kinds: [{ label: "Changed", bump: "major", breaking: "ask" }] },
+      /kinds\[0\]: bump: major and breaking: ask contradict/,
+    ],
+    [
+      { kinds: [{ label: "Removed", bump: "minor", breaking: "yes" }] },
+      /kinds\[0\]: bump: minor and breaking: yes contradict/,
+    ],
+    [
+      { extraFields: [{ key: "breaking", type: "string" }] },
+      /"breaking" is reserved/,
+    ],
     [
       { bumpStrategy: "cargo" },
       /bumpStrategy: must be one of: minor-capped, shifted, literal/,

@@ -62,14 +62,19 @@ export type BumpArgument = (typeof BUMP_ARGUMENTS)[number];
 export const isBumpArgument = (text: string): text is BumpArgument =>
   (BUMP_ARGUMENTS as readonly string[]).includes(text);
 
-/** Picks the most significant bump among the kinds of the given changes. */
+/** The bump of one change: major when it breaks, and the bump of its kind otherwise. */
+const changeBump = (
+  change: Change,
+  kinds: readonly Kind[],
+): Bump | undefined =>
+  change.breaking ? "major" : findKind(kinds, change.kind)?.bump;
+
+/** Picks the most significant bump among the given changes. */
 export function autoBump(
   changes: readonly Change[],
   kinds: readonly Kind[],
 ): Bump {
-  const bumps = new Set(
-    changes.map((change) => findKind(kinds, change.kind)?.bump),
-  );
+  const bumps = new Set(changes.map((change) => changeBump(change, kinds)));
   const bump = BUMPS.find((candidate) => bumps.has(candidate));
   if (bump === undefined) {
     throw new Error("auto bump: no unreleased change has a kind with a bump");
@@ -125,13 +130,18 @@ const releasePartials = (templates: Templates): TemplatePartials => ({
 });
 
 /**
- * The entries of one change, each with the front matter and the kind of
- * the change. A body that holds only list items yields one entry per item,
- * with the item as body, its marker, and its text. Any other body yields
- * one entry, whose text is the whole body and whose marker is empty.
+ * The entries of one change, each with the front matter, the kind, and
+ * whether the change breaks. A body that holds only list items yields one
+ * entry per item, with the item as body, its marker, and its text. Any
+ * other body yields one entry, whose text is the whole body and whose
+ * marker is empty.
  */
 function changeEntries(change: Change): TemplateView[] {
-  const values = { ...change.metadata, kind: change.kind };
+  const values = {
+    ...change.metadata,
+    kind: change.kind,
+    breaking: change.breaking,
+  };
   const items = listItems(change.body);
   if (items === undefined) {
     return [{ ...values, body: change.body, marker: "", text: change.body }];
@@ -337,11 +347,14 @@ const releaseData = (
 ): ReleaseData => ({
   date,
   hash: notesHash(notes),
-  changes: inKindOrder(changes, kinds).map(({ kind, metadata, body }) => ({
-    kind,
-    metadata,
-    body,
-  })),
+  changes: inKindOrder(changes, kinds).map(
+    ({ kind, breaking, metadata, body }) => ({
+      kind,
+      breaking,
+      metadata,
+      body,
+    }),
+  ),
 });
 
 /**

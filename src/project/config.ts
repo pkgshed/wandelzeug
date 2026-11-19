@@ -8,7 +8,7 @@ import { join } from "node:path";
 import * as v from "valibot";
 import { attempt, findDuplicate } from "../shared/foundations.ts";
 import { isFieldName } from "../shared/templates.ts";
-import { BUMP_STRATEGIES, BUMPS } from "../shared/versions.ts";
+import { type Bump, BUMP_STRATEGIES, BUMPS } from "../shared/versions.ts";
 
 /**
  * The directory that holds the configuration, the unreleased changes and
@@ -21,7 +21,21 @@ export const CHANGES_DIR = ".changes";
 export const CONFIG_FILE = join(CHANGES_DIR, "config.yaml");
 
 /** Keys that templates fill from the change itself, so metadata may not use them. */
-export const RESERVED_KEYS = ["kind", "title", "body", "marker", "text"];
+export const RESERVED_KEYS = [
+  "kind",
+  "breaking",
+  "title",
+  "body",
+  "marker",
+  "text",
+];
+
+/**
+ * Whether the changes of a kind break compatibility: always, never, or as
+ * the author of each change says, which "new" asks for.
+ */
+export const BREAKING_POLICIES = ["yes", "no", "ask"] as const;
+export type BreakingPolicy = (typeof BREAKING_POLICIES)[number];
 
 /** The value types of an extra field, named as in changie's custom choices. */
 export const FIELD_TYPES = ["string", "block", "int", "enum", "enums"] as const;
@@ -68,7 +82,18 @@ export const DEFAULT_TAG_TEMPLATE = `release {{tag}}
 export const DEFAULT_LINK_FORMAT =
   "[`{{version}}`]: {{repositoryUrl}}/{{#previousTag}}compare/{{previousTag}}...{{tag}}{{/previousTag}}{{^previousTag}}releases/tag/{{tag}}{{/previousTag}}";
 
-/** The kinds of Keep a Changelog, in its order. */
+/**
+ * One change entry: the list marker, a "**Breaking:**" label for a change
+ * that breaks compatibility, and the text. Without the label, the marker
+ * and the text give the body back.
+ */
+export const DEFAULT_CHANGE_FORMAT =
+  "{{marker}}{{#breaking}}**Breaking:** {{/breaking}}{{text}}";
+
+/**
+ * The kinds of Keep a Changelog, in its order. A removal always breaks
+ * compatibility, and a change or a fix may, so "new" asks for those.
+ */
 const DEFAULT_KINDS = [
   {
     label: "Added",
@@ -76,7 +101,8 @@ const DEFAULT_KINDS = [
   },
   {
     label: "Changed",
-    bump: "major",
+    bump: "minor",
+    breaking: "ask",
   },
   {
     label: "Deprecated",
@@ -84,11 +110,12 @@ const DEFAULT_KINDS = [
   },
   {
     label: "Removed",
-    bump: "major",
+    breaking: "yes",
   },
   {
     label: "Fixed",
     bump: "patch",
+    breaking: "ask",
   },
   {
     label: "Security",
@@ -167,6 +194,49 @@ const bumpStrategy = v.picklist(
   `must be one of: ${BUMP_STRATEGIES.join(", ")}`,
 );
 
+/** A breaking policy. true and false stand for yes and no, as YAML 1.1 tools write them. */
+const breakingPolicy = v.pipe(
+  v.unknown(),
+  v.transform((value) => {
+    if (typeof value !== "boolean") return value;
+    return value ? "yes" : "no";
+  }),
+  v.picklist(
+    BREAKING_POLICIES,
+    `must be one of: ${BREAKING_POLICIES.join(", ")}`,
+  ),
+);
+
+/** A kind as its mapping states it, before settleKind. */
+type KindEntries = {
+  readonly label: string;
+  readonly bump?: Bump | undefined;
+  readonly breaking?: BreakingPolicy | undefined;
+};
+
+/** Only breaking changes bump the major version, so a kind must not say otherwise. */
+function contradictsMajorBump(kind: KindEntries): boolean {
+  const bothStated = kind.bump !== undefined && kind.breaking !== undefined;
+  if (!bothStated) return false;
+  const bumpsMajor = kind.bump === "major";
+  const alwaysBreaks = kind.breaking === "yes";
+  return bumpsMajor !== alwaysBreaks;
+}
+
+/**
+ * Settles the bump and the breaking policy of a kind. A major bump breaks
+ * compatibility by definition, so "bump: major" means "breaking: yes", and
+ * a kind that always breaks bumps the major version.
+ */
+function settleKind(kind: KindEntries) {
+  const alwaysBreaks = kind.breaking === "yes" || kind.bump === "major";
+  return {
+    label: kind.label,
+    bump: alwaysBreaks ? ("major" as const) : kind.bump,
+    breaking: alwaysBreaks ? ("yes" as const) : (kind.breaking ?? "no"),
+  };
+}
+
 /** A kind of change, such as Added. A bare label in the list stands for a kind without a bump. */
 const KindSchema = v.pipe(
   v.unknown(),
@@ -177,10 +247,19 @@ const KindSchema = v.pipe(
     {
       label: nonEmptyText,
       bump: absent(bump),
+      breaking: absent(breakingPolicy),
     },
     "",
     "must be a label or a mapping",
   ),
+  v.check(
+    (kind) => !contradictsMajorBump(kind),
+    (issue) => {
+      const kind = issue.input;
+      return `bump: ${kind.bump} and breaking: ${kind.breaking} contradict, since only breaking changes bump the major version`;
+    },
+  ),
+  v.transform(settleKind),
 );
 
 const labelDuplicate = (kinds: readonly { label: string }[]) =>
@@ -517,7 +596,7 @@ const ConfigSchema = v.pipe(
     /** Mustache template for the heading of a kind section. */
     kindFormat: setting(text, "### {{kind}}"),
     /** Mustache template for one change entry. */
-    changeFormat: setting(text, "{{body}}"),
+    changeFormat: setting(text, DEFAULT_CHANGE_FORMAT),
     /** Mustache template for a whole release, which places the formats as partials. */
     releaseTemplate: setting(text, DEFAULT_RELEASE_TEMPLATE),
     /** Mustache template for the message of the tag that "wlz release" creates. */
@@ -545,7 +624,11 @@ const ConfigSchema = v.pipe(
 /** Project settings, with every default filled in. */
 export type Config = v.InferOutput<typeof ConfigSchema>;
 
-/** A kind of change, such as Added. Its bump drives "auto" versions. */
+/**
+ * A kind of change, such as Added. Its bump drives "auto" versions, and its
+ * breaking policy decides whether its changes break compatibility. A kind
+ * bumps the major version exactly when it always breaks.
+ */
 export type Kind = v.InferOutput<typeof KindSchema>;
 
 /** A front matter entry that "new" asks for and "check" validates. */

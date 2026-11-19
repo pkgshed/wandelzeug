@@ -70,9 +70,13 @@ function kindKey(kind: string): string {
   return JSON.stringify(kind).replace(/--(?=!?>)/g, "-\\x2D");
 }
 
-/** Formats a change as an item of the list below its kind: its metadata, then its body. */
+/**
+ * Formats a change as an item of the list below its kind: whether it
+ * breaks, its metadata, then its body. Only a breaking change says so.
+ */
 function changeItem(change: Change): string[] {
   const entries = [
+    ...(change.breaking ? [dataEntry("breaking", true)] : []),
     ...Object.entries(change.metadata).map(([key, value]) =>
       dataEntry(key, value),
     ),
@@ -157,6 +161,11 @@ function parseDataHash(value: string | undefined): NotesHash {
   return hash as NotesHash;
 }
 
+/**
+ * Parses a change of a data block. The data block records what the release
+ * holds, so a change without "breaking: true" does not break, whatever its
+ * kind says today.
+ */
 function parseDataChange(kind: string, value: unknown): Change {
   if (!isRecord(value)) {
     throw new Error("must be a mapping");
@@ -168,7 +177,8 @@ function parseDataChange(kind: string, value: unknown): Change {
   if (typeof body !== "string") {
     throw new Error("body is missing");
   }
-  return changeFromFields({ kind, ...fields }, body);
+  const stated = changeFromFields({ kind, ...fields }, body);
+  return { ...stated, breaking: stated.breaking ?? false };
 }
 
 function parseKindGroup(kind: string, value: unknown): Change[] {
