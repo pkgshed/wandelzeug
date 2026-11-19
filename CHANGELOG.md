@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 <!-- wlz:releases -->
 
+<!-- BEGIN wlz:release 0.4.0 -->
+## [`0.4.0`] (2026-11-19)
+
+### Added
+
+* Breaking changes: each kind sets `breaking` to `yes`, `no` or `ask`. A breaking change bumps the major version, gets `breaking: true` in its file and in the data block, and the default `changeFormat` labels it as **Breaking:**, unless its kind always breaks. For a kind that asks, `wlz new` asks "Breaking change?". `--breaking` and `--no-breaking` answer without a question, and without a terminal, such a kind needs one of them.
+* `wlz offboard` removes wandelzeug from a project: it deletes the `.changes` directory and keeps the changelog. With `--strip-markers`, it also removes the markers and data blocks from the changelog, and keeps the notes and link definitions. Unreleased changes and a kept draft stop it unless you pass `--force`, and `--dry-run` lists what it would do.
+* Empty changes: `wlz new --empty`, with an optional `--reason`, records that a branch has nothing notable for the changelog, so `wlz check --since` passes. In a terminal, the list of kinds ends with "No notable change". The reason never shows in the changelog, and the next release deletes empty changes along with the changes that it releases.
+* A skill for coding agents such as Claude Code, Codex, OpenCode, and pi, which records change files with `wlz` and words their entries. The repository is a Claude Code plugin marketplace, and aska installs the skill from `github.com/pkgshed/wandelzeug/plugins/wandelzeug/skills/wandelzeug`.
+
+### Changed
+
+* Change files get five random characters after their number, as in `001-k7m2q-added-support-for-toml-config.md`, so branches that pick the same number at the same time merge without a conflict. The characters come from Crockford's base32 alphabet in lower case. wlz reads file names with and without them.
+* `auto` no longer leaves 0.y.z on its own. The new `bumpStrategy` setting decides how it bumps while the latest release is 0.y.z: `minor-capped`, the default, turns a major change into a minor bump, `shifted` moves every bump one level lower, and `literal` keeps the bumps of the kinds as they are. An explicit bump, as in `wlz release major`, always applies as given.
+* **Breaking:** The default kinds: `Changed` bumps the minor version and asks whether a change breaks, and so does `Fixed` with a patch bump. `Removed` always breaks. A kind with `bump: major` keeps working and always breaks. `breaking` and `kindBreaks` are now reserved front matter keys, so extra fields with these names need new names.
+
+### Fixed
+
+* A bare `wlz new`, and `wlz new -C DIR` without other options, failed with "No matching option found" since wandelzeug 0.2.0. Both ask for the change again.
+
+<!-- wlz:data date=2026-11-19 hash=h1:RzHPCfMLl/jLz/h2N9wOmA
+Added:
+  - body: "* Breaking changes: each kind sets `breaking` to `yes`, `no` or `ask`. A breaking change bumps the major version, gets `breaking: true` in its file and in the data block, and the default `changeFormat` labels it as **Breaking:**, unless its kind always breaks. For a kind that asks, `wlz new` asks \"Breaking change?\". `--breaking` and `--no-breaking` answer without a question, and without a terminal, such a kind needs one of them."
+  - body: "* `wlz offboard` removes wandelzeug from a project: it deletes the `.changes` directory and keeps the changelog. With `--strip-markers`, it also removes the markers and data blocks from the changelog, and keeps the notes and link definitions. Unreleased changes and a kept draft stop it unless you pass `--force`, and `--dry-run` lists what it would do."
+  - body: "* Empty changes: `wlz new --empty`, with an optional `--reason`, records that a branch has nothing notable for the changelog, so `wlz check --since` passes. In a terminal, the list of kinds ends with \"No notable change\". The reason never shows in the changelog, and the next release deletes empty changes along with the changes that it releases."
+  - body: "* A skill for coding agents such as Claude Code, Codex, OpenCode, and pi, which records change files with `wlz` and words their entries. The repository is a Claude Code plugin marketplace, and aska installs the skill from `github.com/pkgshed/wandelzeug/plugins/wandelzeug/skills/wandelzeug`."
+Changed:
+  - body: "* Change files get five random characters after their number, as in `001-k7m2q-added-support-for-toml-config.md`, so branches that pick the same number at the same time merge without a conflict. The characters come from Crockford's base32 alphabet in lower case. wlz reads file names with and without them."
+  - body: "* `auto` no longer leaves 0.y.z on its own. The new `bumpStrategy` setting decides how it bumps while the latest release is 0.y.z: `minor-capped`, the default, turns a major change into a minor bump, `shifted` moves every bump one level lower, and `literal` keeps the bumps of the kinds as they are. An explicit bump, as in `wlz release major`, always applies as given."
+  - breaking: true
+    body: "* The default kinds: `Changed` bumps the minor version and asks whether a change breaks, and so does `Fixed` with a patch bump. `Removed` always breaks. A kind with `bump: major` keeps working and always breaks. `breaking` and `kindBreaks` are now reserved front matter keys, so extra fields with these names need new names."
+Fixed:
+  - body: "* A bare `wlz new`, and `wlz new -C DIR` without other options, failed with \"No matching option found\" since wandelzeug 0.2.0. Both ask for the change again."
+-->
+<!-- END wlz:release 0.4.0 -->
+
 <!-- BEGIN wlz:release 0.3.0 -->
 ## [`0.3.0`] (2026-11-18)
 
@@ -101,6 +137,7 @@ Added:
 <!-- END wlz:release 0.1.0 -->
 
 <!-- BEGIN wlz:links -->
+[`0.4.0`]: https://github.com/pkgshed/wandelzeug/compare/v0.3.0...v0.4.0
 [`0.3.0`]: https://github.com/pkgshed/wandelzeug/compare/v0.2.1...v0.3.0
 [`0.2.1`]: https://github.com/pkgshed/wandelzeug/compare/v0.2.0...v0.2.1
 [`0.2.0`]: https://github.com/pkgshed/wandelzeug/compare/v0.1.0...v0.2.0

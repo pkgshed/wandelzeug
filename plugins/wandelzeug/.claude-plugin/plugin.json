@@ -1,6 +1,6 @@
 {
   "name": "wandelzeug",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Records user-facing changes as change files with wandelzeug, the wlz command, and words their changelog entries.",
   "author": {
     "name": "pkgshed",
