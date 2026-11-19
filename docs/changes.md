@@ -54,7 +54,7 @@ For a kind that asks, the question defaults to no. `--breaking` and `--no-breaki
 
 A `breaking` entry must agree with the kind, so `check` reports `breaking: true` for a kind that never breaks, and `breaking: false` for a kind that always breaks.
 
-The data block of a release records `breaking: true` for each breaking change, so a later change to the kinds leaves past releases as they are. The default `changeFormat` labels a breaking change as `* **Breaking:** ...`, see [Templates](changelog.md#templates). Releases that `wlz import` converts mark no change as breaking, because their notes stay as they are.
+The data block of a release records `breaking: true` for each breaking change, so a later change to the kinds leaves past releases as they are. The default `changeFormat` labels a breaking change as `* **Breaking:** ...`, see [Templates](changelog.md#templates). A change of a kind that always breaks goes without the label, because the heading of its kind says so already. To label every breaking change, set `changeFormat` to `{{marker}}{{#breaking}}**Breaking:** {{/breaking}}{{text}}`. Releases that `wlz import` converts mark no change as breaking, because their notes stay as they are.
 
 ## Extra fields
 

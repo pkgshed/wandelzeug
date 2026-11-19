@@ -91,7 +91,8 @@ kindFormat: ${yamlString(DEFAULT_CONFIG.kindFormat)}
 # One change entry. A change whose body is a list has an entry per item.
 # Values: body, the item or the whole body; marker, the list marker such
 # as "* "; text, the item after its marker; kind; breaking, set for a
-# change that breaks compatibility; and any front matter key, as in
+# change that breaks compatibility; kindBreaks, set when its kind always
+# breaks; and any front matter key, as in
 # "{{body}}{{#pr}} (#{{pr}}){{/pr}}" or "{{marker}}[{{issue}}] {{text}}".
 changeFormat: ${yamlString(DEFAULT_CONFIG.changeFormat)}
 

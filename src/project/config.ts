@@ -24,6 +24,7 @@ export const CONFIG_FILE = join(CHANGES_DIR, "config.yaml");
 export const RESERVED_KEYS = [
   "kind",
   "breaking",
+  "kindBreaks",
   "title",
   "body",
   "marker",
@@ -84,11 +85,12 @@ export const DEFAULT_LINK_FORMAT =
 
 /**
  * One change entry: the list marker, a "**Breaking:**" label for a change
- * that breaks compatibility, and the text. Without the label, the marker
- * and the text give the body back.
+ * that breaks compatibility, and the text. A kind that always breaks says
+ * so in its heading already, so its changes go without the label. Without
+ * the label, the marker and the text give the body back.
  */
 export const DEFAULT_CHANGE_FORMAT =
-  "{{marker}}{{#breaking}}**Breaking:** {{/breaking}}{{text}}";
+  "{{marker}}{{#breaking}}{{^kindBreaks}}**Breaking:** {{/kindBreaks}}{{/breaking}}{{text}}";
 
 /**
  * The kinds of Keep a Changelog, in its order. A removal always breaks

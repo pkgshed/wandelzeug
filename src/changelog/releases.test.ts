@@ -15,7 +15,40 @@ import {
   previousRelease,
   releaseValues,
   renderLink,
+  renderRelease,
 } from "./releases.ts";
+
+describe("breaking labels", () => {
+  const values = releaseValues(
+    projectWith({}).config,
+    version("2.0.0"),
+    isoDate("2026-11-17"),
+    [],
+  );
+  const changes = [
+    breakingChange("Removed", "* Old option"),
+    breakingChange("Fixed", "* Strict parsing"),
+    change("Fixed", "* Crash"),
+  ];
+
+  test("the default labels breaking changes unless their kind always breaks", () => {
+    const notes = renderRelease(projectWith({}), values, changes);
+    expect(notes).toContain("### Removed\n\n* Old option\n");
+    expect(notes).toContain(
+      "### Fixed\n\n* **Breaking:** Strict parsing\n* Crash",
+    );
+  });
+
+  test("a change format without kindBreaks labels every breaking change", () => {
+    const project = projectWith({
+      changeFormat:
+        "{{marker}}{{#breaking}}**Breaking:** {{/breaking}}{{text}}",
+    });
+    const notes = renderRelease(project, values, changes);
+    expect(notes).toContain("### Removed\n\n* **Breaking:** Old option\n");
+    expect(notes).toContain("* **Breaking:** Strict parsing\n* Crash");
+  });
+});
 
 describe("auto bumps", () => {
   const breaking = [

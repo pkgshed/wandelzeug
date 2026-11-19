@@ -100,7 +100,7 @@ The following settings in `.changes/config.yaml` are templates:
 | `fragmentName` | `{{kind}}-{{title}}` | `title` (the first body line without its list marker), `kind`, and any front matter key. Every value becomes a lower-case slug, transliterated to ASCII where possible, such as `groesse-aendern` for "Größe ändern", and `titleMaxLength` limits the title. |
 | `versionFormat` | ``## [`{{version}}`] ({{date}})`` | `version`, `date`, `tag`, `previousVersion`, and `previousTag` |
 | `kindFormat` | `### {{kind}}` | `kind` |
-| `changeFormat` | `{{marker}}{{#breaking}}**Breaking:** {{/breaking}}{{text}}` | `body`, `marker`, `text`, `kind`, `breaking`, and any front matter key, such as `{{body}}{{#pr}} (#{{pr}}){{/pr}}` |
+| `changeFormat` | `{{marker}}{{#breaking}}{{^kindBreaks}}**Breaking:** {{/kindBreaks}}{{/breaking}}{{text}}` | `body`, `marker`, `text`, `kind`, `breaking`, `kindBreaks`, and any front matter key, such as `{{body}}{{#pr}} (#{{pr}}){{/pr}}` |
 | `releaseTemplate` | See the following example | The values of `versionFormat`, and `kinds`, where each kind has a `kind` and its `changes` |
 | `linkFormat` | See [Links](#links) | The values of `versionFormat`, and `repositoryUrl` |
 | `tagTemplate` | See [Tag messages](releases.md#tag-messages) | The values of `releaseTemplate`, and `references` |
@@ -120,7 +120,7 @@ releaseTemplate: |
   {{/kinds}}
 ```
 
-`changeFormat` renders one entry for each item of a change whose body is a list. `body` is the item, `marker` its list marker, such as `* `, and `text` the item after its marker. So `{{marker}}{{#issue}}[{{issue}}] {{/issue}}{{text}}` puts the issue in front of every item, as in `* [FOO-1234] Added the thing.` A body that holds anything besides a list renders as one entry, with the whole body as `body` and `text` and an empty `marker`. The default places a `**Breaking:**` label between the marker and the text of a breaking change, see [Breaking changes](changes.md#breaking-changes). Without the label, it renders the body as it is.
+`changeFormat` renders one entry for each item of a change whose body is a list. `body` is the item, `marker` its list marker, such as `* `, and `text` the item after its marker. So `{{marker}}{{#issue}}[{{issue}}] {{/issue}}{{text}}` puts the issue in front of every item, as in `* [FOO-1234] Added the thing.` A body that holds anything besides a list renders as one entry, with the whole body as `body` and `text` and an empty `marker`. The default places a `**Breaking:**` label between the marker and the text of a breaking change, unless its kind always breaks, see [Breaking changes](changes.md#breaking-changes). Without the label, it renders the body as it is.
 
 To change a detail, such as a link after each change, edit a format. To change the layout, replace `releaseTemplate`. It can still place the formats, or it can write everything itself. wandelzeug rejects unknown values in `versionFormat` and `kindFormat`, partials outside `releaseTemplate`, and unknown partials, because Mustache would otherwise render them as empty without a trace.
 

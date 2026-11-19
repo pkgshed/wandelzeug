@@ -98,6 +98,10 @@ describe("configuration", () => {
       /"breaking" is reserved/,
     ],
     [
+      { extraFields: [{ key: "kindBreaks", type: "string" }] },
+      /"kindBreaks" is reserved/,
+    ],
+    [
       { bumpStrategy: "cargo" },
       /bumpStrategy: must be one of: minor-capped, shifted, literal/,
     ],

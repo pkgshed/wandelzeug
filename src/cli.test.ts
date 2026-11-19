@@ -265,6 +265,7 @@ describe("command line", () => {
     await run("init");
     await run("new", "-k", "Fixed", "--breaking", "-b", "* Strict parsing");
     await run("new", "-k", "Fixed", "--no-breaking", "-b", "* Crash");
+    await run("new", "-k", "Removed", "-b", "* Old option");
     const result = await run("batch", "auto", "--date", "2026-11-17");
 
     expect(result.exitCode).toBe(0);
@@ -272,6 +273,10 @@ describe("command line", () => {
     expect(changelog).toContain(
       [
         "## [`2.0.0`] (2026-11-17)",
+        "",
+        "### Removed",
+        "",
+        "* Old option",
         "",
         "### Fixed",
         "",
@@ -281,7 +286,15 @@ describe("command line", () => {
       ].join("\n"),
     );
     expect(changelog).toContain(
-      'Fixed:\n  - breaking: true\n    body: "* Strict parsing"\n  - body: "* Crash"\n',
+      [
+        "Removed:",
+        "  - breaking: true",
+        '    body: "* Old option"',
+        "Fixed:",
+        "  - breaking: true",
+        '    body: "* Strict parsing"',
+        '  - body: "* Crash"',
+      ].join("\n"),
     );
     expect((await run("render")).exitCode).toBe(0);
     expect(await readFile(join(root, "CHANGELOG.md"), "utf8")).toBe(changelog);
@@ -870,7 +883,7 @@ describe("command line", () => {
       await run("init", "--repository", "https://github.com/o/r");
       await editConfig("extraFields: []", linkFields);
       await editConfig(
-        'changeFormat: "{{marker}}{{#breaking}}**Breaking:** {{/breaking}}{{text}}"',
+        'changeFormat: "{{marker}}{{#breaking}}{{^kindBreaks}}**Breaking:** {{/kindBreaks}}{{/breaking}}{{text}}"',
         'changeFormat: "{{marker}}{{#issue}}[{{issue}}] {{/issue}}{{text}}{{#pr}} ([#{{pr}}]){{/pr}}"',
       );
     }
