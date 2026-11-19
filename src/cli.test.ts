@@ -277,6 +277,21 @@ describe("command line", () => {
     expect((await run("next", "major")).stdout).toBe("2.0.0\n");
   });
 
+  test("next auto keeps a major change below 1.0.0 unless the strategy is literal", async () => {
+    await writeFile(join(root, "CHANGELOG.md"), "# History\n\n## [0.3.0]\n");
+    await run("init");
+    await run("new", "-k", "Changed", "-b", "* Format");
+
+    expect((await run("next", "auto")).stdout).toBe("0.4.0\n");
+    expect((await run("next", "major")).stdout).toBe("1.0.0\n");
+
+    await editConfig("bumpStrategy: minor-capped", "bumpStrategy: shifted");
+    expect((await run("next", "auto")).stdout).toBe("0.4.0\n");
+
+    await editConfig("bumpStrategy: shifted", "bumpStrategy: literal");
+    expect((await run("next", "auto")).stdout).toBe("1.0.0\n");
+  });
+
   test("init takes the repository URL from the origin remote", async () => {
     await git(root, "init", "--quiet");
     await git(root, "remote", "add", "origin", "git@codeberg.org:o/r.git");
@@ -1009,6 +1024,18 @@ describe("command line", () => {
         ].join("\n"),
       );
       expect(await gitOutput(root, "status", "--porcelain")).toBe("");
+    });
+
+    test("the tag helper gets the bump after the bump strategy", async () => {
+      await projectWithFakeHelper();
+      await run("new", "-k", "Changed", "-b", "* Format");
+      await commitAll(root, "record a breaking change");
+
+      const result = await run("release", "auto", "--date", "2026-11-17");
+      expect(result.exitCode).toBe(0);
+      const calls = await helperCalls();
+      expect(calls[0]).toBe("check minor 0.1.0 v0.1.0 for v0.1.0");
+      expect(calls[1]).toStartWith("create minor v0.1.0 ");
     });
 
     test("the tag message defines the references of the notes", async () => {

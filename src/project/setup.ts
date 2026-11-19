@@ -172,7 +172,21 @@ releaseData: ${DEFAULT_CONFIG.releaseData}
 #     replace: '"version": "{{version}}"'
 replacements: []
 
-# Kinds in changelog order. A bump lets "auto" pick the next version.
+# How "auto" bumps while the latest release is 0.y.z, which Semantic
+# Versioning reserves for initial development. From 1.0.0 on, every change
+# bumps as its kind says. An explicit bump, as in "wlz release major",
+# always applies as given.
+#
+#   minor-capped  a major change bumps the minor version, and the other
+#                 changes bump as their kind says
+#   shifted       every change bumps one level lower: major to minor,
+#                 minor to patch, and patch stays patch
+#   literal       every change bumps as its kind says, so a major change
+#                 releases 1.0.0
+bumpStrategy: ${DEFAULT_CONFIG.bumpStrategy}
+
+# Kinds in changelog order. A bump lets "auto" pick the next version, see
+# bumpStrategy.
 kinds:
   - label: Added
     bump: minor

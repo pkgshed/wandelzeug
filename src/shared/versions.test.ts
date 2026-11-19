@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { nextVersion } from "../changelog/releases.ts";
 import { release, version } from "../test-helpers.ts";
 import {
+  applyBumpStrategy,
   bumpVersion,
   compareVersions,
   formatVersion,
@@ -36,6 +37,26 @@ describe("versions and dates", () => {
   ] as const)("bumping %p by %p yields %p", (start, bump, expected) => {
     expect(formatVersion(bumpVersion(version(start), bump), "")).toBe(expected);
   });
+
+  test.each([
+    ["minor-capped", "0.3.0", "major", "minor"],
+    ["minor-capped", "0.3.0", "minor", "minor"],
+    ["minor-capped", "0.3.0", "patch", "patch"],
+    ["shifted", "0.3.0", "major", "minor"],
+    ["shifted", "0.3.0", "minor", "patch"],
+    ["shifted", "0.3.0", "patch", "patch"],
+    ["literal", "0.3.0", "major", "major"],
+    ["literal", "0.3.0", "minor", "minor"],
+    ["minor-capped", "0.0.0", "major", "minor"],
+    ["minor-capped", "1.2.0", "major", "major"],
+    ["shifted", "1.2.0", "major", "major"],
+    ["shifted", "1.2.0", "minor", "minor"],
+  ] as const)(
+    "the %p strategy turns a bump of %p by %p into %p",
+    (strategy, start, bump, expected) => {
+      expect(applyBumpStrategy(bump, version(start), strategy)).toBe(expected);
+    },
+  );
 
   test("compareVersions follows semantic version precedence", () => {
     expect(compareVersions(version("1.10.0"), version("1.9.0"))).toBe(1);

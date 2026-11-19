@@ -34,7 +34,7 @@ import {
   releaseNotes,
 } from "./changelog/markers.ts";
 import {
-  autoBump,
+  autoReleaseBump,
   nextVersion,
   planRelease,
   removeFragments,
@@ -347,19 +347,17 @@ function missingNotesMessage(
 async function runRelease(invocation: InvocationOf<"release">): Promise<void> {
   const project = await openInvocationProject(invocation);
   const date = invocation.date ?? today();
-  const { bump } = invocation;
-  const plan = await planRelease(project, { type: "bump", bump }, date);
-  const part =
-    bump === "auto" ? autoBump(plan.fragments, project.config.kinds) : bump;
+  const target = { type: "bump", bump: invocation.bump } as const;
+  const plan = await planRelease(project, target, date);
 
   if (invocation.dryRun) {
-    await checkRelease(project, part, plan);
+    await checkRelease(project, plan);
     const links = plan.links.length === 0 ? "" : `\n${plan.links.join("\n")}\n`;
     process.stdout.write(`${plan.section}\n${links}`);
     return;
   }
 
-  const result = await releaseAndTag(project, part, plan);
+  const result = await releaseAndTag(project, plan);
   console.log(`released ${result.name} in commit ${result.commit}`);
 }
 
@@ -376,11 +374,11 @@ async function runShow(invocation: InvocationOf<"show">): Promise<void> {
 
 async function runNext(invocation: InvocationOf<"next">): Promise<void> {
   const project = await openInvocationProject(invocation);
+  const releases = knownReleases(await readChangelog(project));
   const bump =
     invocation.bump === "auto"
-      ? autoBump(await loadFragments(project), project.config.kinds)
+      ? autoReleaseBump(releases, await loadFragments(project), project.config)
       : invocation.bump;
-  const releases = knownReleases(await readChangelog(project));
   const version = nextVersion(releases, bump);
   console.log(formatVersion(version, project.config.versionPrefix));
 }

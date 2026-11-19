@@ -62,6 +62,38 @@ export function formatVersion(version: Version, prefix: string): string {
 export const compareVersions = (a: Version, b: Version): number =>
   Bun.semver.order(formatVersion(a, ""), formatVersion(b, ""));
 
+/**
+ * How "auto" bumps while the version is 0.y.z, which Semantic Versioning
+ * reserves for initial development:
+ *
+ * - minor-capped: a major bump becomes a minor bump, the others stay.
+ * - shifted: every bump moves one level lower, and patch stays patch.
+ * - literal: every bump stays, so a major bump leaves 0.y.z.
+ */
+export const BUMP_STRATEGIES = ["minor-capped", "shifted", "literal"] as const;
+export type BumpStrategy = (typeof BUMP_STRATEGIES)[number];
+
+/**
+ * Adjusts a bump of the given version to a bump strategy. The strategies
+ * differ only while the version is 0.y.z. From 1.0.0 on, every bump stays.
+ */
+export function applyBumpStrategy(
+  bump: Bump,
+  version: Version,
+  strategy: BumpStrategy,
+): Bump {
+  const isInitialDevelopment = version.major === 0;
+  if (!isInitialDevelopment) return bump;
+  switch (strategy) {
+    case "minor-capped":
+      return bump === "major" ? "minor" : bump;
+    case "shifted":
+      return bump === "major" ? "minor" : "patch";
+    case "literal":
+      return bump;
+  }
+}
+
 /** Raises one part of a version and resets the less significant parts. */
 export function bumpVersion(version: Version, bump: Bump): Version {
   switch (bump) {

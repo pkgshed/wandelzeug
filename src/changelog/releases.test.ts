@@ -1,6 +1,44 @@
 import { describe, expect, test } from "bun:test";
-import { isoDate, projectWith, release, version } from "../test-helpers.ts";
-import { previousRelease, releaseValues, renderLink } from "./releases.ts";
+import type { Change } from "../changes/fragments.ts";
+import type { Bump, BumpStrategy } from "../shared/versions.ts";
+import {
+  change,
+  isoDate,
+  projectWith,
+  release,
+  version,
+} from "../test-helpers.ts";
+import type { Release } from "./markers.ts";
+import {
+  autoReleaseBump,
+  previousRelease,
+  releaseValues,
+  renderLink,
+} from "./releases.ts";
+
+describe("auto bumps", () => {
+  const changed = [change("Fixed", "* Crash"), change("Changed", "* Format")];
+  const added = [change("Fixed", "* Crash"), change("Added", "* Option")];
+
+  const cases: [BumpStrategy, Release[], Change[], Bump][] = [
+    ["minor-capped", [release("0.3.0")], changed, "minor"],
+    ["minor-capped", [], changed, "minor"],
+    ["minor-capped", [release("0.3.0")], added, "minor"],
+    ["shifted", [release("0.3.0")], changed, "minor"],
+    ["shifted", [release("0.3.0")], added, "patch"],
+    ["literal", [release("0.3.0")], changed, "major"],
+    ["minor-capped", [release("1.2.0"), release("0.9.0")], changed, "major"],
+    ["shifted", [release("1.2.0")], added, "minor"],
+  ];
+
+  test.each(cases)(
+    "the %p strategy after %p bumps %p by %p",
+    (bumpStrategy, releases, changes, expected) => {
+      const { config } = projectWith({ bumpStrategy });
+      expect(autoReleaseBump(releases, changes, config)).toBe(expected);
+    },
+  );
+});
 
 describe("release values", () => {
   const releases = [release("1.5.0"), release("1.4.2"), release("1.4.1")];

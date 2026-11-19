@@ -32,6 +32,7 @@ import {
   type TemplateView,
 } from "../shared/templates.ts";
 import {
+  applyBumpStrategy,
   type Bump,
   BUMPS,
   bumpVersion,
@@ -77,17 +78,40 @@ export function autoBump(
 }
 
 /**
- * Bumps the latest stable release, or 0.0.0 when nothing is released yet.
- * The releases must come newest first. Prereleases are skipped because a
- * patch bump of 2.0.0-rc.1 would otherwise yield 2.0.1 instead of a
- * successor to the stable line.
+ * The version that bumps start from: the latest stable release, or 0.0.0
+ * when nothing is released yet. The releases must come newest first.
+ * Prereleases are skipped because a patch bump of 2.0.0-rc.1 would
+ * otherwise yield 2.0.1 instead of a successor to the stable line.
  */
-export function nextVersion(releases: readonly Release[], bump: Bump): Version {
+function bumpBase(releases: readonly Release[]): Version {
   const latestStable = releases.find(
     (release) => release.version.prerelease === undefined,
   );
-  return bumpVersion(latestStable?.version ?? ZERO_VERSION, bump);
+  return latestStable?.version ?? ZERO_VERSION;
 }
+
+/** Bumps the latest stable release, or 0.0.0 when nothing is released yet. */
+export const nextVersion = (
+  releases: readonly Release[],
+  bump: Bump,
+): Version => bumpVersion(bumpBase(releases), bump);
+
+/**
+ * The bump of "auto": the most significant bump among the kinds of the
+ * changes, adjusted to the bump strategy for the version that it raises.
+ * So while the latest stable release is 0.y.z, "auto" leaves it only when
+ * the strategy is literal.
+ */
+export const autoReleaseBump = (
+  releases: readonly Release[],
+  changes: readonly Change[],
+  config: Pick<Config, "kinds" | "bumpStrategy">,
+): Bump =>
+  applyBumpStrategy(
+    autoBump(changes, config.kinds),
+    bumpBase(releases),
+    config.bumpStrategy,
+  );
 
 /** Ends a format with exactly one line break, so its partial fills whole lines. */
 const asLines = (template: Template): string =>
@@ -253,16 +277,27 @@ export function parseReleaseTarget(text: string): ReleaseTarget | undefined {
   return version === undefined ? undefined : { type: "version", version };
 }
 
-function resolveReleaseVersion(
+/** The version of a release, and the bump that yields it when the target is a bump. */
+type ResolvedTarget = {
+  readonly version: Version;
+  readonly bump: Bump | undefined;
+};
+
+/** Resolves a release target. An explicit bump applies as given, whatever the bump strategy. */
+function resolveReleaseTarget(
   target: ReleaseTarget,
   releases: readonly Release[],
   fragments: readonly Fragment[],
-  kinds: readonly Kind[],
-): Version {
-  if (target.type === "version") return target.version;
+  config: Config,
+): ResolvedTarget {
+  if (target.type === "version") {
+    return { version: target.version, bump: undefined };
+  }
   const bump =
-    target.bump === "auto" ? autoBump(fragments, kinds) : target.bump;
-  return nextVersion(releases, bump);
+    target.bump === "auto"
+      ? autoReleaseBump(releases, fragments, config)
+      : target.bump;
+  return { version: nextVersion(releases, bump), bump };
 }
 
 function rejectExistingRelease(
@@ -336,6 +371,12 @@ export type ReleasePlan = {
   readonly path: string;
   /** The version of the release. */
   readonly version: Version;
+  /**
+   * The bump from the latest stable release that yields the version, after
+   * the bump strategy for "auto". It is undefined when the target names
+   * the version.
+   */
+  readonly bump: Bump | undefined;
   /** What templates know about the release: its name, date, tag and predecessor. */
   readonly values: ReleaseValues;
   /** The release as the template renders it, without markers, such as for a tag message. */
@@ -378,11 +419,11 @@ export async function planRelease(
 
   const document = await readChangelog(project);
   const releases = knownReleases(document);
-  const version = resolveReleaseVersion(
+  const { version, bump } = resolveReleaseTarget(
     target,
     releases,
     fragments,
-    project.config.kinds,
+    project.config,
   );
   rejectExistingRelease(releases, version);
 
@@ -402,6 +443,7 @@ export async function planRelease(
   return {
     path: changelogPath(project),
     version,
+    bump,
     values,
     notes,
     section,

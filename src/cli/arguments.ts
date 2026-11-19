@@ -66,7 +66,7 @@ const dryRunFlag = (description: Message) =>
   switchFlag(["-n", "--dry-run"], description);
 
 /** How bumps work, for the commands that take one. */
-const BUMP_EXPLANATION = message`A bump starts from the latest stable release in the changelog, or from the baseline, and skips prereleases.`;
+const BUMP_EXPLANATION = message`A bump starts from the latest stable release in the changelog, or from the baseline, and skips prereleases. While that release is 0.y.z, the bumpStrategy setting adjusts the bump of auto.`;
 
 const bumpArgument = argument(bumpValue, {
   description: message`major, minor, patch, or auto for the largest bump among the kinds of the unreleased changes`,
